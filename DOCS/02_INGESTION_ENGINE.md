@@ -123,6 +123,58 @@ most one file's work. Re-running the same command resumes.
 Writes use write-then-rename, so a crash mid-write leaves the previous manifest intact rather than
 a truncated one.
 
+---
+
+## Deduplication — three layers
+
+Duplicate content costs three separate things: embedding quota, vector storage,
+and — worst — retrieval slots, because twin passages compete for the same top-5
+and crowd out other papers. Each layer catches what the layer below cannot.
+
+### Layer 1 — byte-identical files, before any parsing
+
+`split_byte_duplicates()` groups the corpus by SHA-256 of the raw bytes *before
+anything is opened*. A duplicated PDF therefore costs nothing at all: no
+extraction, no chunking, no embedding, no points.
+
+The canonical file is the one with the **shortest name, ties broken
+alphabetically**. That deterministically prefers `paper.pdf` over `paper-2.pdf`
+or `paper (copy).pdf` — almost always the one you meant to keep.
+
+Duplicates are recorded in the manifest with `status="duplicate"` and
+`duplicate_of`, and any points a *previous* run indexed under their name are
+deleted. Without that purge, a collection built before dedup existed keeps
+serving twin passages forever.
+
+### Layer 2 — same text, different bytes, before embedding
+
+Two files can differ as bytes yet extract to identical text: re-saved PDF,
+different producer metadata, a re-download. Layer 1 misses these, so after
+cleaning, the document's content hash is checked against everything already
+indexed (`Manifest.find_duplicate_of`).
+
+The same shortest-name rule applies here. If the file being processed has the
+preferred name, the already-indexed twin is *demoted* instead — its points are
+deleted and its record flipped to `duplicate`. This makes the outcome
+independent of which file happened to be ingested first, which matters when a
+manifest was written before dedup existed and has both marked `ok`.
+
+### Layer 3 — repeated chunks and repeated strings
+
+- Chunks whose text is byte-for-byte identical to an earlier chunk **in the same
+  document** are dropped before embedding (repeated tables, duplicated
+  abstracts).
+- `embed_texts()` collapses repeated strings within a call: the text is embedded
+  once and the vector fanned back out to every position that shared it.
+- The on-disk embedding cache catches repeats *across* runs and documents.
+
+Chunks are **not** deduplicated across different documents. Two papers
+legitimately share sentences ("Blood smears were stained with Giemsa"), and
+dropping one paper's copy would break that paper's citation for a passage it
+genuinely contains.
+
+---
+
 ### Deterministic point IDs
 
 ```python
@@ -151,6 +203,11 @@ python -m app.ingestion.processor DATA/subfolder
 **Always `--dry-run` first on a new corpus.** It exercises every loader and chunker tier and writes
 `processed_data/*.json`. Reading one of those files is the fastest way to catch a badly-extracted
 PDF — before you have spent any quota embedding it.
+
+`--dry-run` opens the manifest **read-only**. A dry run never indexes anything, so persisting its
+results would mark every file `ok` with zero points and the next real run would skip the whole
+corpus. As a second line of defence, `should_skip()` also refuses to trust an `ok` record that has
+no indexed points.
 
 ### Exit codes
 

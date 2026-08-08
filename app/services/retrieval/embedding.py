@@ -24,6 +24,7 @@ quietly switching to a 768-dim local model, which would corrupt the index.
 from __future__ import annotations
 
 import random
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -63,37 +64,101 @@ def _is_batch_problem(exc: Exception) -> bool:
     return any(m in msg for m in _BATCH_SIZE_MARKERS)
 
 
+# Gemini reports how long to wait, in two different shapes depending on which
+# layer produced the error. Both are worth honouring: the computed exponential
+# backoff tops out around 17s, which never clears a per-minute quota window.
+_RETRY_AFTER_PATTERNS = (
+    re.compile(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)s", re.IGNORECASE),
+    re.compile(r"retry\s+in\s+(\d+(?:\.\d+)?)\s*s", re.IGNORECASE),
+    re.compile(r"retry[-_ ]?after['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)", re.IGNORECASE),
+)
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Seconds the provider asked us to wait, if it said so."""
+    message = str(exc)
+    delays = []
+    for pattern in _RETRY_AFTER_PATTERNS:
+        match = pattern.search(message)
+        if match:
+            try:
+                delays.append(float(match.group(1)))
+            except ValueError:
+                pass
+    if not delays:
+        return None
+    # Cap at two minutes — a longer instruction means a daily quota, and sleeping
+    # through that is worse than failing with a clear message.
+    return min(max(delays), 120.0)
+
+
 class _RateLimiter:
     """
-    Client-side request-per-minute cap.
+    Client-side ceiling on **texts embedded per minute**.
 
-    Free-tier Gemini rejects with a bare 429 once you cross its RPM ceiling.
-    Staying under it deliberately is far cheaper than discovering it by failing:
-    a rejected request still consumes quota on some tiers.
+    This counts texts, not requests, because that is what Gemini charges:
+
+        Quota exceeded for metric: .../embed_content_free_tier_requests, limit: 100
+
+    is 100 *texts* per minute per project per model. A batch of 16 costs 16
+    units. Throttling batches instead would permit ~14x the real ceiling.
+
+    Staying under the limit deliberately is much cheaper than discovering it by
+    failing — a rejected request still burns quota, and the mandated cooldown is
+    close to a full minute.
     """
 
     def __init__(self, max_per_minute: int):
         self.max_per_minute = max(1, max_per_minute)
-        self._times: list[float] = []
+        self._events: list[tuple[float, int]] = []   # (timestamp, units)
+        self._blocked_until = 0.0
         self._lock = threading.Lock()
 
-    def acquire(self) -> None:
-        with self._lock:
-            now = time.monotonic()
-            self._times = [t for t in self._times if now - t < 60.0]
+    def _prune(self, now: float) -> int:
+        self._events = [(t, n) for t, n in self._events if now - t < 60.0]
+        return sum(n for _, n in self._events)
 
-            if len(self._times) >= self.max_per_minute:
-                sleep_for = 60.0 - (now - self._times[0]) + 0.05
-                if sleep_for > 0:
-                    logfire.info(
-                        "Embedding rate limiter pausing {secs}s ({rpm} req/min ceiling)",
-                        secs=round(sleep_for, 1), rpm=self.max_per_minute,
-                    )
-                    time.sleep(sleep_for)
+    def acquire(self, units: int = 1) -> None:
+        """Block until `units` more texts can be sent inside the sliding window."""
+        units = max(1, units)
+
+        while True:
+            with self._lock:
                 now = time.monotonic()
-                self._times = [t for t in self._times if now - t < 60.0]
 
-            self._times.append(now)
+                # A provider-mandated cooldown outranks our own accounting.
+                if now < self._blocked_until:
+                    sleep_for = self._blocked_until - now
+                else:
+                    used = self._prune(now)
+
+                    if used + units <= self.max_per_minute or not self._events:
+                        # `not self._events` lets an oversized batch through
+                        # rather than deadlocking on a limit it can never satisfy.
+                        self._events.append((now, units))
+                        return
+
+                    # Wait for the oldest event to age out of the window.
+                    sleep_for = 60.0 - (now - self._events[0][0]) + 0.05
+
+            if sleep_for > 0:
+                logfire.info(
+                    "Embedding rate limiter pausing {secs}s (ceiling {cap} texts/min)",
+                    secs=round(sleep_for, 1), cap=self.max_per_minute, requested=units,
+                )
+                time.sleep(sleep_for)
+
+    def penalize(self, seconds: float) -> None:
+        """
+        Provider said 429 — hold every caller off for exactly this long.
+
+        The event window is cleared rather than marked full: the provider's
+        cooldown *is* the window reset, and keeping stale events would stack a
+        second ~60s wait on top of a delay the provider said was enough.
+        """
+        with self._lock:
+            self._blocked_until = max(self._blocked_until, time.monotonic() + seconds)
+            self._events = []
 
 
 @dataclass
@@ -247,7 +312,7 @@ def _embed_batch_with_retry(backend: EmbeddingBackend, batch: list[str], depth: 
 
     for attempt in range(1, max_attempts + 1):
         try:
-            _limiter.acquire()
+            _limiter.acquire(len(batch))
             return backend.embed_documents(batch)
 
         except Exception as exc:
@@ -265,12 +330,21 @@ def _embed_batch_with_retry(backend: EmbeddingBackend, batch: list[str], depth: 
                 )
 
             if _is_retryable(exc) and attempt < max_attempts:
-                # Exponential backoff with jitter — without jitter, parallel
-                # workers retry in lockstep and re-trigger the same 429.
-                wait = min(60.0, 2.0 ** attempt) + random.uniform(0, 1.5)
+                # Prefer the provider's own instruction. A quota window is
+                # ~60s wide, while exponential backoff tops out near 17s — so
+                # computed backoff alone just retries inside the same blocked
+                # minute and burns all five attempts for nothing.
+                mandated = _retry_after(exc)
+                computed = min(60.0, 2.0 ** attempt) + random.uniform(0, 1.5)
+                wait = max(mandated + 1.0, computed) if mandated else computed
+
+                if mandated:
+                    _limiter.penalize(mandated)
+
                 logfire.warning(
-                    "Embedding call failed ({err}) — retry {n}/{max} in {wait}s",
+                    "Embedding call failed ({err}) — retry {n}/{max} in {wait}s{src}",
                     err=str(exc)[:200], n=attempt, max=max_attempts, wait=round(wait, 1),
+                    src=" (provider-specified)" if mandated else "",
                 )
                 time.sleep(wait)
                 continue
@@ -316,8 +390,6 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     backend = _init()
 
     cached = _cache.get_many(texts, backend.name, backend.model, backend.dim)
-    pending_idx = [i for i in range(len(texts)) if i not in cached]
-
     if cached:
         logfire.info(
             "Embedding cache served {hit}/{total} texts",
@@ -327,6 +399,29 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     results: list[list[float] | None] = [None] * len(texts)
     for i, vec in cached.items():
         results[i] = vec
+
+    # Collapse repeated text to a single API call. Identical passages do occur —
+    # a duplicated table, a repeated abstract — and embedding the same string
+    # twice buys an identical vector for twice the quota.
+    first_seen: dict[str, int] = {}
+    pending_idx: list[int] = []
+    aliases: dict[int, int] = {}   # duplicate position -> position that will be embedded
+
+    for i in range(len(texts)):
+        if i in cached:
+            continue
+        anchor = first_seen.get(texts[i])
+        if anchor is None:
+            first_seen[texts[i]] = i
+            pending_idx.append(i)
+        else:
+            aliases[i] = anchor
+
+    if aliases:
+        logfire.info(
+            "Collapsed {n} repeated text(s) — embedded once, reused in place",
+            n=len(aliases), unique=len(pending_idx),
+        )
 
     batch_size = max(1, settings.EMBED_BATCH_SIZE)
     for start in range(0, len(pending_idx), batch_size):
@@ -355,6 +450,10 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
         _cache.put_many(batch, vectors, backend.name, backend.model, backend.dim)
 
+    # Fan the deduplicated vectors back out to every position that shared the text.
+    for duplicate_pos, anchor_pos in aliases.items():
+        results[duplicate_pos] = results[anchor_pos]
+
     missing = [i for i, v in enumerate(results) if v is None]
     if missing:
         raise EmbeddingError(f"{len(missing)} texts produced no vector (indices {missing[:5]}...)")
@@ -373,13 +472,18 @@ def embed_query(query: str) -> list[float]:
     max_attempts = max(1, settings.EMBED_MAX_RETRIES)
     for attempt in range(1, max_attempts + 1):
         try:
-            _limiter.acquire()
+            _limiter.acquire(1)
             vector = backend.embed_single(query)
             _cache.put_many([query], [vector], backend.name, backend.model, backend.dim)
             return vector
         except Exception as exc:
             if _is_retryable(exc) and attempt < max_attempts:
-                wait = min(30.0, 2.0 ** attempt) + random.uniform(0, 1.0)
+                mandated = _retry_after(exc)
+                computed = min(30.0, 2.0 ** attempt) + random.uniform(0, 1.0)
+                # A live query cannot sit for a full minute waiting on quota, so
+                # the mandated delay is capped here even though ingestion honours
+                # it fully. Better a fast failure the caller can report.
+                wait = min(max(mandated, computed), 20.0) if mandated else computed
                 logfire.warning(
                     "Query embedding retry {n}/{max} in {wait}s ({err})",
                     n=attempt, max=max_attempts, wait=round(wait, 1), err=str(exc)[:200],

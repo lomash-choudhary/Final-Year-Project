@@ -24,6 +24,13 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | `QDRANT_API_KEY` | Required for Qdrant Cloud; leave blank for local Docker |
 | `LOGFIRE_TOKEN` | Distributed tracing. Without it, tracing goes to console only |
 
+## Qdrant write tuning
+
+| Variable | Default | Notes |
+|---|---|---|
+| `QDRANT_UPSERT_BATCH` | `24` | Points per upsert. A 3072-dim vector is ~12 KB before payload, so 64 points is an ~800 KB write — enough to time out a throttled free cloud cluster. Raise it for local Docker |
+| `QDRANT_TIMEOUT` | `120` | Seconds. Writes also retry 3× and halve the batch on timeout before giving up |
+
 ---
 
 ## Embedding pipeline
@@ -34,8 +41,8 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | `GEMINI_EMBEDDING_MODEL` | *(blank)* | Blank means probe `gemini-embedding-001` → `text-embedding-004` → `embedding-001` and use the first your key can reach. Model availability differs per account, which is why this is probed rather than assumed |
 | `LOCAL_EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | Downloads ~420 MB on first use, then runs offline forever |
 | `EMBED_BATCH_SIZE` | `16` | Texts per Gemini request. Auto-halves on a batch-size rejection |
-| `EMBED_MAX_RPM` | `90` | Client-side ceiling. Free tier allows ~100 — staying under deliberately is cheaper than discovering the limit by failing |
-| `EMBED_MAX_RETRIES` | `5` | Exponential backoff with jitter on 429/quota errors |
+| `EMBED_MAX_RPM` | `90` | **Texts per minute, not requests per minute.** Gemini charges `embed_content_free_tier_requests` per *text*: a batch of 16 costs 16 units, not 1. The free ceiling is 100. Keep this below it |
+| `EMBED_MAX_RETRIES` | `5` | Retries on 429. The provider's own `retryDelay` (typically ~55s) is parsed from the error and honoured — computed backoff alone tops out near 17s and just retries inside the same blocked minute |
 | `EMBEDDING_CACHE_ENABLED` | `true` | **Leave this on.** It is what makes re-ingestion free |
 | `EMBEDDING_CACHE_PATH` | `.cache/embeddings.sqlite3` | Keyed by provider + model + dimension + text |
 

@@ -49,26 +49,29 @@ def configure_observability(service_name: str = "bovine-rag") -> str:
     # Tried richest-first. Keyword arguments to logfire.configure() have shifted
     # between releases, so a version that rejects `environment` or
     # `ConsoleOptions` degrades to a plainer call rather than losing all tracing.
+    # Each attempt is a callable, not a pre-built dict: `logfire.ConsoleOptions`
+    # does not exist in every release, and building the argument eagerly would
+    # raise AttributeError before the try block could fall back.
     attempts = [
-        dict(
+        lambda: dict(
             token=settings.LOGFIRE_TOKEN or None,
             service_name=service_name,
             environment=settings.ENVIRONMENT,
             send_to_logfire="if-token-present",
             console=logfire.ConsoleOptions(min_log_level="info"),
         ),
-        dict(
+        lambda: dict(
             token=settings.LOGFIRE_TOKEN or None,
             service_name=service_name,
             send_to_logfire="if-token-present",
         ),
-        dict(token=settings.LOGFIRE_TOKEN or None),
+        lambda: dict(token=settings.LOGFIRE_TOKEN or None),
     ]
 
     status = "Disabled"
-    for index, kwargs in enumerate(attempts):
+    for index, build_kwargs in enumerate(attempts):
         try:
-            logfire.configure(**kwargs)
+            logfire.configure(**build_kwargs())
             status = "Connected & tracing" if settings.LOGFIRE_TOKEN else "Console only (no LOGFIRE_TOKEN)"
             break
         except Exception as exc:

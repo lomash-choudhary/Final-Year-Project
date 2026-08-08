@@ -390,7 +390,9 @@ that must *not* be blocked.
 | `/health` shows 0 points | Ingestion has not run: `python -m app.ingestion.processor --wipe` |
 | `DimensionMismatch` | The embedding model changed. Re-ingest with `--wipe` |
 | `All LLM targets exhausted` | Every Groq key is rate-limited. Wait for the window, or add `GROQ_FALLBACK_API_KEY` |
-| Ingestion stops on a 429 | Re-run the same command — the manifest resumes. Lower `EMBED_MAX_RPM` to be gentler |
+| Ingestion stops on a 429 | Re-run the same command — the manifest resumes. Lower `EMBED_MAX_RPM` (counted in **texts**/min, free ceiling is 100) |
+| `The write operation timed out` | Qdrant Cloud is throttling. Lower `QDRANT_UPSERT_BATCH` (default 24) or raise `QDRANT_TIMEOUT` |
+| UI says "Backend unreachable. Tried " with a blank URL | `BACKEND_URL` is set but empty in `.env`. Remove the line or set `http://localhost:8000` |
 | Answers cite the wrong page | Check `processed_data/<file>.json` — the PDF probably needs a different extractor tier |
 | First query is very slow | FlashRank downloads its ONNX model once. Subsequent queries are fast |
 | Legitimate question blocked | Add a domain term to `_DOMAIN_TERMS` in `app/guardrails/fast_rails.py` |

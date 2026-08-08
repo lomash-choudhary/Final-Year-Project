@@ -159,7 +159,70 @@ excluding it with `--file` ingestion of the others.
 
 ---
 
-## 15. Embedding cache keys include the model
+## 15. Gemini's embedding quota is charged per TEXT, not per request
+
+The error reads:
+
+```
+Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests,
+limit: 100, model: gemini-embedding-1.0
+```
+
+`limit: 100` is **100 texts per minute**, not 100 batches. A batch of 16 costs 16 units. A limiter
+that throttles batches at 90/min therefore permits ~1,440 texts/min — roughly 14× the real ceiling,
+which produces a run that succeeds for four files and then 429s continuously.
+
+`EMBED_MAX_RPM` is counted in texts for this reason. At the default 90, a 805-chunk corpus takes
+about nine minutes of wall-clock. That pacing is the feature.
+
+---
+
+## 16. Exponential backoff alone cannot clear a per-minute quota
+
+Gemini returns `"retryDelay": "54s"` in the 429 body. Pure exponential backoff peaks near 17s on
+the fourth attempt, so all five retries land inside the *same* blocked minute and the file fails
+anyway.
+
+The retry path parses `retryDelay` (and the `Please retry in 54.8s` prose variant) and sleeps for
+that instead, then puts the shared rate limiter into a cooldown so concurrent callers do not
+immediately spend more quota on top.
+
+---
+
+## 17. `--dry-run` must not write the manifest
+
+A dry run parses and chunks but never indexes. Persisting its results would mark every file `ok`
+with zero points, and the next real run would skip the entire corpus and index nothing.
+
+`Manifest(..., read_only=True)` handles this. `should_skip()` independently refuses to trust an
+`ok` record with `points <= 0`, so even a manifest corrupted by an older build self-heals.
+
+---
+
+## 18. Qdrant Cloud free clusters time out on large writes
+
+A 3072-dim vector is ~12 KB before payload. At 64 points per upsert that is an ~800 KB write, and a
+throttled free cluster can exceed 60s on it — failing the whole document.
+
+`QDRANT_UPSERT_BATCH` defaults to 24, the client timeout to 120s, and `_upsert_window()` retries
+three times and **halves the batch on timeout** before giving up. Raise the batch on local Docker,
+where none of this applies.
+
+---
+
+## 19. Never call `os.getenv()` outside `app/config.py`
+
+`ui/app.py` originally did `os.getenv("BACKEND_URL", settings.BACKEND_URL)`. With
+`BACKEND_URL = ""` in `.env` — present but blank — `os.getenv` returns `""` rather than falling
+back, so every request went to `/query` with no host and the UI reported
+`Backend unreachable. Tried ` with an empty URL.
+
+`config.py`'s `_str()` treats blank as absent and returns the default. That protection only works
+if everything reads through `settings`.
+
+---
+
+## 20. Embedding cache keys include the model
 
 Cache keys are `sha256(provider|model|dim|text)`. Switching models does not produce stale hits —
 it produces a cold cache and a full re-embed. That is correct: a vector from

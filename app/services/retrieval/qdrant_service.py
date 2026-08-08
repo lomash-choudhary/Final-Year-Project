@@ -16,6 +16,7 @@ Two decisions here matter more than the rest:
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -70,7 +71,7 @@ def get_client() -> QdrantClient:
         _client = QdrantClient(
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY or None,
-            timeout=60,
+            timeout=settings.QDRANT_TIMEOUT,
         )
     return _client
 
@@ -176,26 +177,66 @@ def delete_by_source(source: str) -> None:
         logfire.warning("delete_by_source failed for {source}: {err}", source=source, err=str(exc))
 
 
+_TIMEOUT_MARKERS = ("timed out", "timeout", "deadline", "connection", "reset by peer", "502", "503", "504")
+
+
+def _is_transient(exc: Exception) -> bool:
+    return any(m in str(exc).lower() for m in _TIMEOUT_MARKERS)
+
+
+def _upsert_window(client: QdrantClient, window: list[models.PointStruct], depth: int = 0) -> int:
+    """
+    Write one window, retrying transient failures and halving on timeout.
+
+    A free-tier cloud cluster is throttled: the same 24-point write can take 2s
+    or 30s depending on what else the shard is doing. Halving on timeout finds a
+    size the cluster will actually accept instead of failing the whole document —
+    which is what a single 64-point, 800 KB write does at 3072 dimensions.
+    """
+    for attempt in range(1, 4):
+        try:
+            client.upsert(collection_name=settings.QDRANT_COLLECTION, points=window, wait=True)
+            return len(window)
+        except Exception as exc:
+            transient = _is_transient(exc)
+
+            if transient and len(window) > 4 and depth < 3:
+                mid = len(window) // 2
+                logfire.warning(
+                    "Qdrant write timed out on {size} points — splitting into {a}+{b}",
+                    size=len(window), a=mid, b=len(window) - mid,
+                )
+                return (
+                    _upsert_window(client, window[:mid], depth + 1)
+                    + _upsert_window(client, window[mid:], depth + 1)
+                )
+
+            if transient and attempt < 3:
+                wait = 2.0 * attempt
+                logfire.warning(
+                    "Qdrant upsert retry {n}/3 in {wait}s ({err})",
+                    n=attempt, wait=wait, err=str(exc)[:200],
+                )
+                time.sleep(wait)
+                continue
+
+            logfire.error("Qdrant upsert failed permanently: {err}", err=str(exc)[:300])
+            raise
+
+    raise RuntimeError("Qdrant upsert retries exhausted")
+
+
 def upsert_points(points: list[models.PointStruct]) -> int:
-    """Upsert in sub-batches — one 5 MB request is far more fragile than ten small ones."""
+    """Upsert in sub-batches — one large request is far more fragile than several small ones."""
     if not points:
         return 0
 
     client = get_client()
     written = 0
-    batch = 64
+    batch = max(1, settings.QDRANT_UPSERT_BATCH)
 
     for start in range(0, len(points), batch):
-        window = points[start : start + batch]
-        try:
-            client.upsert(collection_name=settings.QDRANT_COLLECTION, points=window, wait=True)
-            written += len(window)
-        except Exception as exc:
-            logfire.error(
-                "Qdrant upsert failed for points {a}-{b}: {err}",
-                a=start, b=start + len(window), err=str(exc)[:300],
-            )
-            raise
+        written += _upsert_window(client, points[start : start + batch])
 
     return written
 

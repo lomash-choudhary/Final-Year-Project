@@ -31,7 +31,8 @@ class FileRecord:
     filename: str
     file_hash: str
     content_hash: str = ""
-    status: str = "pending"          # pending | ok | failed | skipped
+    status: str = "pending"          # pending | ok | failed | skipped | duplicate
+    duplicate_of: str = ""           # set when status == "duplicate"
     chunks: int = 0
     points: int = 0
     pages: int = 0
@@ -54,8 +55,14 @@ def file_hash(path: Path) -> str:
 
 
 class Manifest:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, read_only: bool = False):
+        """
+        read_only=True is used by --dry-run. A dry run parses and chunks but
+        never indexes, so persisting its results would mark every file "ok" with
+        zero points — and the next real run would skip the entire corpus.
+        """
         self.path = Path(path)
+        self.read_only = read_only
         self.records: dict[str, FileRecord] = {}
         self._load()
 
@@ -74,6 +81,8 @@ class Manifest:
             self.records = {}
 
     def save(self) -> None:
+        if self.read_only:
+            return
         payload = {
             "version": MANIFEST_VERSION,
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -98,13 +107,41 @@ class Manifest:
         record = self.records.get(filename)
         if record is None:
             return False, "not ingested before"
+        if record.status == "duplicate" and record.file_hash == current_hash:
+            return True, f"duplicate of {record.duplicate_of}"
         if record.status != "ok":
             return False, f"previous status was '{record.status}'"
+        if record.points <= 0:
+            # "ok" with nothing indexed means the record was written by a run
+            # that never reached Qdrant. Trusting it would skip the file forever.
+            return False, "recorded as ok but has no indexed points"
         if record.file_hash != current_hash:
             return False, "file changed on disk"
         if record.embedding_dim and record.embedding_dim != embedding_dim:
             return False, f"embedding dim changed {record.embedding_dim} -> {embedding_dim}"
         return True, "unchanged since last successful ingest"
+
+    def find_duplicate_of(self, filename: str, content_hash: str) -> str | None:
+        """
+        Return the name of an already-indexed file carrying identical content.
+
+        Catches the case byte-level deduplication cannot: two files that differ
+        as bytes (different PDF producer, re-saved metadata) but extract to
+        exactly the same text. Embedding and indexing the second one costs quota
+        and puts twin passages into every retrieval result.
+        """
+        if not content_hash:
+            return None
+        for name, record in self.records.items():
+            if name == filename:
+                continue
+            if record.status == "ok" and record.content_hash == content_hash:
+                return name
+        return None
+
+    def indexed_sources(self) -> set[str]:
+        """Filenames whose points are currently expected to exist in Qdrant."""
+        return {n for n, r in self.records.items() if r.status == "ok"}
 
     def record(self, entry: FileRecord) -> None:
         entry.ingested_at = datetime.now(timezone.utc).isoformat(timespec="seconds")

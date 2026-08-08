@@ -93,6 +93,11 @@ class Settings:
     )
     QDRANT_API_KEY: str = field(default_factory=lambda: _str("QDRANT_API_KEY"))
     QDRANT_COLLECTION: str = field(default_factory=lambda: _str("QDRANT_COLLECTION", "bovine_disease_rag"))
+    # Points per upsert request. A 3072-dim vector is ~12 KB before payload, so
+    # 64 points is an ~800 KB write — enough to time out a throttled free-tier
+    # cloud cluster. Smaller writes are slower in aggregate but far more reliable.
+    QDRANT_UPSERT_BATCH: int = field(default_factory=lambda: _int("QDRANT_UPSERT_BATCH", 24))
+    QDRANT_TIMEOUT: int = field(default_factory=lambda: _int("QDRANT_TIMEOUT", 120))
 
     # ── embedding pipeline ────────────────────────────────────────────────────
     EMBEDDING_PROVIDER: str = field(default_factory=lambda: _str("EMBEDDING_PROVIDER", "auto").lower())
@@ -100,6 +105,10 @@ class Settings:
         default_factory=lambda: _str("LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
     )
     EMBED_BATCH_SIZE: int = field(default_factory=lambda: _int("EMBED_BATCH_SIZE", 16))
+    # TEXTS per minute, not requests per minute. Gemini's free embedding quota is
+    # `embed_content_free_tier_requests: limit 100`, and it is charged per text
+    # embedded — a batch of 16 costs 16 units, not 1. Throttling batches instead
+    # of texts is how a run sails past the ceiling and 429s on the fifth file.
     EMBED_MAX_RPM: int = field(default_factory=lambda: _int("EMBED_MAX_RPM", 90))
     EMBED_MAX_RETRIES: int = field(default_factory=lambda: _int("EMBED_MAX_RETRIES", 5))
     EMBEDDING_CACHE_ENABLED: bool = field(default_factory=lambda: _bool("EMBEDDING_CACHE_ENABLED", True))
@@ -193,6 +202,11 @@ class Settings:
                     )
             if self.CHUNK_OVERLAP >= self.CHUNK_SIZE:
                 problems.append(f"CHUNK_OVERLAP ({self.CHUNK_OVERLAP}) must be smaller than CHUNK_SIZE ({self.CHUNK_SIZE}).")
+            if self.EMBED_BATCH_SIZE > self.EMBED_MAX_RPM:
+                problems.append(
+                    f"EMBED_BATCH_SIZE ({self.EMBED_BATCH_SIZE}) exceeds EMBED_MAX_RPM "
+                    f"({self.EMBED_MAX_RPM} texts/min) — a single batch cannot fit inside the rate limit."
+                )
 
         if scope in ("api", "evals"):
             if not self.GROQ_API_KEY and not self.GEMINI_API_KEY:

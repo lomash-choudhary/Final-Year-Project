@@ -134,12 +134,62 @@ def process_file(path: Path, manifest: Manifest, dim: int, force: bool, dry_run:
 
         record.content_hash = document.content_hash()
 
+        # ── content-level dedup ───────────────────────────────────────────────
+        # Two files can differ as bytes yet extract to identical text (re-saved
+        # PDF, different producer metadata). Caught here, before any quota is
+        # spent, and any stale points under this name are removed.
+        twin = manifest.find_duplicate_of(filename, record.content_hash)
+        if twin:
+            # Same canonical rule as byte-level dedup: shortest name wins, ties
+            # broken alphabetically. Applied here too so the outcome does not
+            # depend on which file happened to be ingested first — a manifest
+            # written before dedup existed has both marked "ok".
+            if (len(filename), filename) < (len(twin), twin):
+                logfire.info(
+                    "{filename} duplicates {twin} but has the preferred name — demoting {twin}",
+                    filename=filename, twin=twin,
+                )
+                previous = manifest.records[twin]
+                previous.status = "duplicate"
+                previous.duplicate_of = filename
+                previous.points = 0
+                if not dry_run:
+                    delete_by_source(twin)
+            else:
+                record.status = "duplicate"
+                record.duplicate_of = twin
+                logfire.info(
+                    "{filename} extracts to the same text as {twin} — skipping embed + index",
+                    filename=filename, twin=twin,
+                )
+                if not dry_run:
+                    delete_by_source(filename)
+                return record
+
         # ── chunk ─────────────────────────────────────────────────────────────
         chunks = chunk_document(document)
         if not chunks:
             record.status = "failed"
             record.error = "chunking produced no chunks"
             return record
+
+        # Drop chunks whose text is byte-for-byte identical to an earlier chunk
+        # in the same document — repeated tables, duplicated abstracts. They
+        # would produce identical vectors and crowd each other in the results.
+        seen_text: set[str] = set()
+        deduped: list[Chunk] = []
+        for chunk in chunks:
+            if chunk.text in seen_text:
+                continue
+            seen_text.add(chunk.text)
+            deduped.append(chunk)
+
+        if len(deduped) < len(chunks):
+            logfire.info(
+                "Dropped {n} duplicate chunk(s) within {filename}",
+                n=len(chunks) - len(deduped), filename=filename,
+            )
+            chunks = deduped
 
         record.chunks = len(chunks)
         record.strategy = chunks[0].strategy
@@ -229,6 +279,48 @@ def discover_files(target: Path) -> list[Path]:
     return files
 
 
+def split_byte_duplicates(files: list[Path]) -> tuple[list[Path], dict[Path, str]]:
+    """
+    Partition files into unique ones and byte-identical copies.
+
+    Grouping by content hash before any parsing means a duplicated PDF costs
+    nothing at all — no extraction, no embedding quota, no Qdrant points, no
+    twin passages competing for a slot in the top-5.
+
+    The canonical file is the one with the shortest name, ties broken
+    alphabetically. That deterministically prefers `paper.pdf` over
+    `paper-2.pdf` or `paper (copy).pdf`, which is almost always the one you
+    meant to keep.
+    """
+    by_hash: dict[str, list[Path]] = {}
+    for path in files:
+        try:
+            by_hash.setdefault(file_hash(path), []).append(path)
+        except Exception as exc:
+            logfire.warning("Could not hash {name} ({err}) — treating as unique", name=path.name, err=str(exc))
+            by_hash.setdefault(f"unhashable:{path}", []).append(path)
+
+    unique: list[Path] = []
+    duplicates: dict[Path, str] = {}
+
+    for group in by_hash.values():
+        if len(group) == 1:
+            unique.append(group[0])
+            continue
+        canonical = sorted(group, key=lambda p: (len(p.name), p.name))[0]
+        unique.append(canonical)
+        for path in group:
+            if path != canonical:
+                duplicates[path] = canonical.name
+                logfire.info(
+                    "Byte-identical duplicate: {dup} == {canonical} — skipping",
+                    dup=path.name, canonical=canonical.name,
+                )
+
+    unique.sort()
+    return unique, duplicates
+
+
 def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None) -> int:
     started = time.time()
 
@@ -240,20 +332,26 @@ def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None)
             print(f"   - {problem}")
         print()
 
-    files = discover_files(target)
+    discovered = discover_files(target)
     if limit:
-        files = files[:limit]
+        discovered = discovered[:limit]
 
-    if not files:
+    if not discovered:
         print(f"No supported files found in {target}")
         print(f"   Supported extensions: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
         return 1
 
+    files, byte_duplicates = split_byte_duplicates(discovered)
+
     print(f"\n Ingesting {len(files)} file(s) from {target}")
+    if byte_duplicates:
+        print(f"   {len(byte_duplicates)} byte-identical duplicate(s) will be skipped entirely:")
+        for path, canonical in byte_duplicates.items():
+            print(f"     - {path.name}  ==  {canonical}")
     print(f"   mode: {'DRY RUN (no API calls, no indexing)' if dry_run else 'full'}"
           f"{' | --wipe' if wipe else ''}{' | --force' if force else ''}\n")
 
-    manifest = Manifest(settings.MANIFEST_PATH)
+    manifest = Manifest(settings.MANIFEST_PATH, read_only=dry_run)
 
     if dry_run:
         dim = 0
@@ -275,18 +373,38 @@ def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None)
         print(f"   qdrant:     {settings.QDRANT_URL} / {settings.QDRANT_COLLECTION}\n")
 
     with logfire.span("Ingestion run", files=len(files), target=str(target), dry_run=dry_run):
+
+        # Record byte-duplicates and purge any points a previous run indexed
+        # under their name. Without the purge, a collection built before dedup
+        # existed keeps serving twin passages forever.
+        for path, canonical in byte_duplicates.items():
+            record = FileRecord(filename=path.name, file_hash="", status="duplicate", duplicate_of=canonical)
+            try:
+                record.file_hash = file_hash(path)
+            except Exception:
+                pass
+            if not dry_run and path.name in manifest.indexed_sources():
+                delete_by_source(path.name)
+                print(f"[--] {path.name}\n        [ dupe ] removed stale points, identical to {canonical}")
+            manifest.record(record)
+        if byte_duplicates:
+            manifest.save()
+
         for i, path in enumerate(files, start=1):
             print(f"[{i}/{len(files)}] {path.name}")
             record = process_file(path, manifest, dim, force, dry_run)
             manifest.record(record)
             manifest.save()  # checkpoint after every file so a crash loses at most one
 
-            icon = {"ok": "  ok  ", "failed": " FAIL ", "skipped": " skip "}.get(record.status, "  ?   ")
-            detail = (
-                f"{record.chunks} chunks, {record.points} points, {record.pages} pages"
-                if record.status == "ok"
-                else record.error
-            )
+            icon = {
+                "ok": "  ok  ", "failed": " FAIL ", "skipped": " skip ", "duplicate": " dupe ",
+            }.get(record.status, "  ?   ")
+            if record.status == "ok":
+                detail = f"{record.chunks} chunks, {record.points} points, {record.pages} pages"
+            elif record.status == "duplicate":
+                detail = f"identical content to {record.duplicate_of} — not embedded, not indexed"
+            else:
+                detail = record.error
             print(f"        [{icon}] {detail}")
             for warning in record.warnings[:2]:
                 print(f"          ! {warning}")
@@ -295,12 +413,19 @@ def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None)
     ok = [r for r in manifest.records.values() if r.status == "ok"]
     failed = [r for r in manifest.records.values() if r.status == "failed"]
     skipped = [r for r in manifest.records.values() if r.status == "skipped"]
+    duplicates = [r for r in manifest.records.values() if r.status == "duplicate"]
 
     elapsed = time.time() - started
     print("\n" + "=" * 66)
     print(f" Ingestion complete in {elapsed:.1f}s")
-    print(f"   indexed: {len(ok)}   failed: {len(failed)}   unsupported: {len(skipped)}")
+    print(f"   indexed: {len(ok)}   failed: {len(failed)}   "
+          f"duplicates: {len(duplicates)}   unsupported: {len(skipped)}")
     print(f"   chunks:  {sum(r.chunks for r in ok)}   points: {sum(r.points for r in ok)}")
+
+    if duplicates:
+        print("\n Duplicates skipped (no embeddings, no vectors):")
+        for record in duplicates:
+            print(f"   - {record.filename}  ==  {record.duplicate_of}")
 
     if not dry_run:
         cache = embedding.describe().get("cache", {})

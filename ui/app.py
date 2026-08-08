@@ -11,7 +11,6 @@ came from" is the part that actually demonstrates the system works.
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 import uuid
@@ -25,7 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
 
-BACKEND = os.getenv("BACKEND_URL", settings.BACKEND_URL).rstrip("/")
+# Read through config, never os.getenv directly. `BACKEND_URL = ""` in .env is
+# present-but-empty, and os.getenv returns "" rather than falling back to the
+# default — which silently turns every request into a POST to "/query" with no
+# host, and surfaces as "Backend unreachable. Tried ".
+BACKEND = settings.BACKEND_URL.rstrip("/")
 REQUEST_TIMEOUT = 180  # the self-correction loop plus a cold reranker can be slow
 
 st.set_page_config(page_title="Bovine Disease Research Assistant", page_icon="🐄", layout="wide")
