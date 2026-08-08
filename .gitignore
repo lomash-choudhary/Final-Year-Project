@@ -19,6 +19,9 @@ ingestion_manifest.json
 evals/results/
 *.log
 
+# Personal study notes — not part of the deliverable
+Understading_the_project/
+
 # Tooling
 .pytest_cache/
 .mypy_cache/
