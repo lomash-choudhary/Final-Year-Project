@@ -1,0 +1,52 @@
+# ==============================================================================
+# BOVINE DISEASE RAG — REQUIREMENTS
+# Everything here runs on free tiers or fully locally. No paid API required.
+# ==============================================================================
+
+# --- CORE API & WEB ---
+fastapi                       # REST API for the agent
+uvicorn[standard]             # ASGI server
+python-dotenv                 # .env loading
+requests                      # UI -> backend + eval harness HTTP
+streamlit                     # Chat UI + eval dashboard
+pandas                        # Eval result tables
+numpy                         # Vector math helpers
+nest-asyncio                  # Nested event loops (Streamlit + async RAGAS)
+
+# --- LLM PROVIDERS (FREE TIERS) ---
+langchain-groq                # Groq: Llama 3.3 70B / 3.1 8B  (primary + fallback key)
+langchain-google-genai        # Gemini: embeddings + chat fallback
+google-generativeai           # Underlying Gemini SDK
+
+# --- ORCHESTRATION ---
+langchain                     # Core abstractions
+langchain-core                # Messages / runnables
+langchain-text-splitters      # RecursiveCharacterTextSplitter (primary chunker)
+langgraph                     # Stateful, cyclic agent graph
+pydantic>=2.0.0               # Schemas & validation
+
+# --- VECTOR DB & RETRIEVAL ---
+qdrant-client                 # Qdrant (local Docker or Qdrant Cloud)
+flashrank                     # Local ONNX cross-encoder reranker (zero API cost)
+
+# --- DOCUMENT PARSING (LOCAL, CASCADING FALLBACKS) ---
+pypdf                         # PDF tier 1
+pdfplumber                    # PDF tier 2 — better on multi-column academic layouts
+pymupdf                       # PDF tier 3 — last-resort extractor (AGPL; optional, see DOCS/06)
+beautifulsoup4                # HTML
+lxml                          # Fast HTML/XML parser backend
+python-docx                   # .docx
+python-pptx                   # .pptx
+
+# --- OBSERVABILITY ---
+logfire[fastapi]              # Pydantic Logfire — distributed tracing
+langsmith                     # LangChain/LangGraph step tracing
+
+# --- GUARDRAILS ---
+# The zero-cost deterministic rail layer needs nothing extra.
+# `nemoguardrails` is only required when GUARDRAILS_MODE=full. It is heavy; see DOCS/08.
+nemoguardrails                # NVIDIA NeMo Guardrails (optional tier)
+
+# --- EVALUATION ---
+ragas                         # Faithfulness / Relevancy / Precision / Recall / Correctness
+sentence-transformers         # Local embeddings for RAGAS + embedding fallback tier
