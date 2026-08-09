@@ -56,12 +56,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Streamlit runs on a different origin; the UI is the only intended browser client.
+# Browser clients (the Streamlit UI, the React frontend) run on different
+# origins, so they need CORS. Defaults to "*"; set CORS_ORIGINS to your deployed
+# frontend domain to stop other sites spending your free-tier quota.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 

@@ -1,0 +1,57 @@
+# ==============================================================================
+# PRODUCTION REQUIREMENTS — API server only (Render / any PaaS)
+#
+# The deployed backend answers questions. It does NOT ingest documents — that
+# runs on your laptop against the same Qdrant cluster. So every ingestion-only
+# and evaluation-only dependency is excluded here.
+#
+# Why this file exists: requirements.txt installs `sentence-transformers`, which
+# pulls in PyTorch (~493 MB) purely as an offline embedding fallback that a
+# server with a working GEMINI_API_KEY never uses. Full install is ~1.5 GB and
+# will not fit a 512 MB free instance. This set is roughly a quarter of that.
+#
+# Use with:  pip install -r requirements-prod.txt
+# ==============================================================================
+
+# --- WEB SERVER ---
+fastapi                       # the API
+uvicorn[standard]             # ASGI server (FastAPI is ASGI, not WSGI — no gunicorn/wsgi)
+python-dotenv                 # config loading
+pydantic>=2.0.0               # request/response validation
+
+# --- AGENT ---
+langgraph                     # the planner -> retriever -> grader -> responder graph
+langchain-core                # message types used by the LLM router
+
+# --- LLM PROVIDERS (lazy-imported by app/llm/router.py) ---
+langchain-groq                # Groq: llama-3.3-70b / llama-3.1-8b
+langchain-google-genai        # Gemini: query embeddings + last-resort chat fallback
+
+# --- RETRIEVAL ---
+qdrant-client                 # vector search
+flashrank                     # local cross-encoder reranker (pulls onnxruntime)
+
+# --- OBSERVABILITY ---
+logfire[fastapi]              # tracing + FastAPI instrumentation
+langsmith                     # agent step tracing (no-op without LANGSMITH_API_KEY)
+
+
+# ==============================================================================
+# DELIBERATELY EXCLUDED — and what breaks if you need them
+# ==============================================================================
+# sentence-transformers   -> pulls torch (~493 MB). Only used when
+#                            EMBEDDING_PROVIDER falls back to a local model.
+#                            Set EMBEDDING_PROVIDER=gemini on the server so this
+#                            path fails loudly instead of silently.
+# pypdf / pdfplumber /    -> document loaders. Ingestion only; never imported by
+#   pymupdf / bs4 / lxml     app/main.py.
+#   python-docx / -pptx
+# langchain-text-splitters-> chunking. Ingestion only.
+# nemoguardrails          -> only needed for GUARDRAILS_MODE=full. The default
+#                            "fast" tier is pure regex and needs nothing. If the
+#                            package is absent, app/guardrails/rails.py logs a
+#                            warning and runs the fast tier — it never runs
+#                            ungated.
+# streamlit / pandas      -> the chat UI and eval dashboard. Not the API.
+# ragas / nest-asyncio    -> evaluation suite. Run locally.
+# numpy                   -> arrives transitively via qdrant-client/onnxruntime.

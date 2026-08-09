@@ -147,6 +147,12 @@ class Settings:
     BACKEND_URL: str = field(default_factory=lambda: _str("BACKEND_URL", "http://localhost:8000"))
     JUDGE_GROQ: str = field(default_factory=lambda: _str("JUDGE_GROQ"))
 
+    # Browser origins allowed to call this API. Comma-separated, or "*" for any.
+    # Defaults to "*" so a new frontend works without configuration; set it to
+    # your deployed domain once you know it, so only your app can spend your
+    # free-tier quota.
+    CORS_ORIGINS: str = field(default_factory=lambda: _str("CORS_ORIGINS", "*"))
+
     # ── optional gateway ──────────────────────────────────────────────────────
     ENABLE_PORTKEY: bool = field(default_factory=lambda: _bool("ENABLE_PORTKEY", False))
     PORTKEY_API_KEY: str = field(default_factory=lambda: _str("PORTKEY_API_KEY"))
@@ -166,6 +172,14 @@ class Settings:
     @property
     def qdrant_is_local(self) -> bool:
         return "localhost" in self.QDRANT_URL or "127.0.0.1" in self.QDRANT_URL
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """CORS_ORIGINS parsed into the list FastAPI's middleware expects."""
+        raw = self.CORS_ORIGINS.strip()
+        if not raw or raw == "*":
+            return ["*"]
+        return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
     def resolve_path(self, value: str) -> Path:
         """Turn a possibly-relative config path into an absolute one under ROOT_DIR."""
