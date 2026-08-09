@@ -70,8 +70,51 @@ RESPONSES = {
 }
 
 
+# Pre-written Hindi replies. The whole point of this tier is that it costs no
+# API call, so translating the canned responses at runtime would defeat it.
+RESPONSES_HI = {
+    "greeting": (
+        "नमस्ते! मैं गाय और भैंस के स्वास्थ्य में आपकी मदद करने वाला सहायक हूँ। "
+        "आप मुझसे बीमारी, लक्षण, दूध उत्पादन या इलाज के बारे में पूछ सकते हैं।\n\n"
+        "जैसे: *मेरी गाय ने खाना बंद कर दिया है, क्या करूँ?*"
+    ),
+    "farewell": "धन्यवाद! अपने पशुओं के बारे में कोई भी सवाल हो तो फिर से पूछिए।",
+    "capabilities": (
+        "मैं गाय और भैंस के स्वास्थ्य से जुड़े सवालों में मदद करता हूँ।\n\n"
+        "**मैं इनमें मदद कर सकता हूँ:**\n"
+        "- बीमारी के लक्षण पहचानना\n"
+        "- घर पर क्या इलाज कर सकते हैं\n"
+        "- कब पशुचिकित्सक को बुलाना ज़रूरी है\n"
+        "- दूध उत्पादन, चारा और देखभाल\n\n"
+        "अपनी समस्या सरल भाषा में बताइए।"
+    ),
+    "off_topic": (
+        "यह मेरे विषय से बाहर है। मैं केवल गाय और भैंस के स्वास्थ्य, बीमारी और देखभाल "
+        "के बारे में मदद कर सकता हूँ।\n\nअपने पशु से जुड़ा कोई सवाल पूछिए।"
+    ),
+    "jailbreak": (
+        "मेरे निर्देश नहीं बदलते। मैं गाय और भैंस के स्वास्थ्य के बारे में ही जानकारी देता हूँ। "
+        "आप क्या जानना चाहते हैं?"
+    ),
+    "injection": (
+        "यह अनुरोध मेरी सेटिंग बदलने की कोशिश लगता है, इसलिए मैं इसे पूरा नहीं करूँगा। "
+        "पशु स्वास्थ्य से जुड़ा कोई सवाल पूछिए।"
+    ),
+}
+
+# One Devanagari character is enough to know the user wrote in Hindi.
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+
+
 def _compile(patterns: list[str]) -> list[re.Pattern]:
     return [re.compile(p, re.IGNORECASE) for p in patterns]
+
+
+def _reply(category: str, text: str) -> str:
+    """Canned reply in the script the user wrote in."""
+    if _DEVANAGARI.search(text) and category in RESPONSES_HI:
+        return RESPONSES_HI[category]
+    return RESPONSES[category]
 
 
 # Order matters: injection and jailbreak are checked before anything friendly,
@@ -99,10 +142,13 @@ _JAILBREAK = _compile([
 ])
 
 _GREETING = _compile([
-    r"^\s*(hi|hii+|hey+|hello+|yo|howdy|hola|namaste|greetings)\s*[!.?]*\s*$",
+    r"^\s*(hi|hii+|hey+|hello+|yo|howdy|hola|namaste|namaskar|greetings)\s*[!.?]*\s*$",
     r"^\s*good\s+(morning|afternoon|evening|day)\s*[!.?]*\s*$",
     r"^\s*(what'?s up|sup|how are you( doing)?)\s*[!.?]*\s*$",
     r"^\s*(hi|hello|hey)\s+(there|bot|assistant)\s*[!.?]*\s*$",
+    # Hindi greetings. Guardrails run before translation, so without these a
+    # Hindi "hello" would fall through to retrieval and cost a full pipeline.
+    r"^\s*(नमस्ते|नमस्कार|प्रणाम|हैलो|हाय)\s*[!.?]*\s*$",
 ])
 
 _FAREWELL = _compile([
@@ -153,6 +199,17 @@ _DOMAIN_TERMS = _compile([
     r"\b(veterinar\w*|hoof|hooves|lameness|udder|lesion|claw|ocular|conjunctiv\w*|keratitis)\b",
     r"\b(vaccin\w*|treatment|diagnos\w*|serolog\w*|pcr|elisa|giemsa|blood smear|therapy|drug)\b",
     r"\b(paper|papers|study|studies|corpus|document|source|citation|author|abstract|finding|findings)\b",
+    # Symptom vocabulary — farmers describe signs, not diseases.
+    r"\b(symptom|symptoms|fever|swelling|limping|lame|diarrh\w*|not eating|stopped eating|"
+    r"appetite|weak|weakness|bloat|wound|udder|teat|calving|pregnan\w*|dung|manure|milk)\b",
+    # Hindi in Devanagari. These run before translation, so the guard needs to
+    # recognise a legitimate Hindi question or it would be judged off-topic.
+    r"(गाय|गाआ|भैंस|पशु|मवेशी|बछड़ा|बैल|दूध|चारा|बीमार|बुखार|इलाज|दवा|पशुचिकित्सक|"
+    r"रोग|बीमारी|संक्रमण|सूजन|दस्त|थन|ब्याना|कमजोर|खा|पानी)",
+    # Roman-script Hindi (Hinglish) — how most Indian users actually type.
+    r"\b(gaay|gay|gai|bhains|bhainse|pashu|mavesh\w*|bachda|bachhda|bail|"
+    r"doodh|dudh|chara|bimar|bimaar|bukhar|bukhaar|ilaj|ilaaj|dawa|dawai|davai|"
+    r"sujan|dast|kamzor|kamzori|thun|byana)\b",
 ])
 
 
@@ -178,24 +235,24 @@ def check(message: str) -> GuardResult:
         )
 
     if rule := _matches(_INJECTION, text):
-        return GuardResult(True, "injection", RESPONSES["injection"], rule)
+        return GuardResult(True, "injection", _reply("injection", text), rule)
 
     if rule := _matches(_JAILBREAK, text):
-        return GuardResult(True, "jailbreak", RESPONSES["jailbreak"], rule)
+        return GuardResult(True, "jailbreak", _reply("jailbreak", text), rule)
 
     if rule := _matches(_GREETING, text):
-        return GuardResult(True, "greeting", RESPONSES["greeting"], rule)
+        return GuardResult(True, "greeting", _reply("greeting", text), rule)
 
     if rule := _matches(_FAREWELL, text):
-        return GuardResult(True, "farewell", RESPONSES["farewell"], rule)
+        return GuardResult(True, "farewell", _reply("farewell", text), rule)
 
     if rule := _matches(_CAPABILITIES, text):
-        return GuardResult(True, "capabilities", RESPONSES["capabilities"], rule)
+        return GuardResult(True, "capabilities", _reply("capabilities", text), rule)
 
     # Off-topic only fires when no domain vocabulary is present, so a question
     # like "what is the economic cost of mastitis in dairy herds" survives.
     if not _matches(_DOMAIN_TERMS, text):
         if rule := _matches(_OFF_TOPIC, text):
-            return GuardResult(True, "off_topic", RESPONSES["off_topic"], rule)
+            return GuardResult(True, "off_topic", _reply("off_topic", text), rule)
 
     return PASS

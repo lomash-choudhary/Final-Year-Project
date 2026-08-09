@@ -120,8 +120,16 @@ class Target:
         return client
 
 
-def _build_chain(tier: str) -> list[Target]:
-    """Assemble the fallback ladder, skipping targets with no credentials."""
+def _build_chain(tier: str, feature: str = "") -> list[Target]:
+    """
+    Assemble the fallback ladder, skipping targets with no credentials.
+
+    When `feature` names a stage that owns a dedicated key (translate,
+    clarifier, advisor), that key is tried **first** and the shared keys are
+    appended behind it. So a busy stage cannot rate-limit the others, but a
+    stage whose own key is exhausted still degrades onto the shared pool instead
+    of failing outright.
+    """
     primary_key = settings.GROQ_API_KEY
     fallback_key = settings.GROQ_FALLBACK_API_KEY
     big = settings.GROQ_PRIMARY_MODEL
@@ -134,6 +142,14 @@ def _build_chain(tier: str) -> list[Target]:
     order = [(small, "fast"), (big, "quality")] if tier == "fast" else [(big, "quality"), (small, "fast")]
 
     chain: list[Target] = []
+
+    dedicated = settings.feature_key(feature) if feature else ""
+    if dedicated:
+        # Translation is mechanical, so it gets its own small model; the other
+        # stages keep the tier's model choice.
+        model = settings.GROQ_TRANSLATE_MODEL if feature == "translate" else order[0][0]
+        chain.append(Target(f"groq-{feature}", "groq", model, dedicated))
+
     for model, model_tag in order:
         if primary_key:
             chain.append(Target(f"groq-primary/{model_tag}", "groq", model, primary_key))
@@ -233,21 +249,25 @@ class LLMRouter:
         self._lock = threading.Lock()
         self.cache = _ResponseCache(settings.LLM_CACHE_TTL, settings.LLM_CACHE_ENABLED)
 
-    def chain(self, tier: str) -> list[Target]:
+    def chain(self, tier: str, feature: str = "") -> list[Target]:
+        # Cached per (tier, feature) so a stage with its own key gets its own
+        # ladder while everything else shares one.
+        cache_key = f"{tier}|{settings.feature_key(feature) and feature}"
         with self._lock:
-            if tier not in self._chains:
-                self._chains[tier] = _build_chain(tier)
-                if not self._chains[tier]:
+            if cache_key not in self._chains:
+                built = _build_chain(tier, feature)
+                if not built:
                     raise AllTargetsFailed(
                         "No LLM credentials configured. Set GROQ_API_KEY (free at "
                         "https://console.groq.com/keys) or GEMINI_API_KEY in your .env."
                     )
+                self._chains[cache_key] = built
                 logfire.info(
                     "LLM chain built",
-                    tier=tier,
-                    targets=[f"{t.label}:{t.model}" for t in self._chains[tier]],
+                    tier=tier, feature=feature or "shared",
+                    targets=[f"{t.label}:{t.model}" for t in built],
                 )
-            return self._chains[tier]
+            return self._chains[cache_key]
 
     @staticmethod
     def _to_messages(prompt: str | list[dict]) -> list[dict]:
@@ -271,7 +291,9 @@ class LLMRouter:
     ) -> LLMResponse:
         """Run a completion through the fallback chain. Raises AllTargetsFailed only if every target is dead."""
         messages = self._to_messages(prompt)
-        cache_key = self.cache.key(messages, temperature, tier)
+        # Feature is part of the cache key: the same text sent to the translator
+        # and to the advisor must not share a cached reply.
+        cache_key = self.cache.key(messages, temperature, f"{tier}|{feature}")
 
         hit = self.cache.get(cache_key)
         if hit:
@@ -282,7 +304,7 @@ class LLMRouter:
                 target_label="cache", cached=True, latency_ms=0,
             )
 
-        chain = self.chain(tier)
+        chain = self.chain(tier, feature)
         lc_messages = self._to_langchain(messages)
         errors: list[str] = []
         started = time.time()

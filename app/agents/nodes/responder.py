@@ -101,7 +101,10 @@ def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
 
 def generate_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
-    user_message = str(messages[-1]["content"]) if messages else state.get("original_query", "")
+    # Always the English form — the translator node ran before the planner.
+    user_message = state.get("query_en") or (
+        str(messages[-1]["content"]) if messages else state.get("original_query", "")
+    )
     history = _format_history(messages)
     documents = state.get("documents", [])
     intent = state.get("intent", "research")

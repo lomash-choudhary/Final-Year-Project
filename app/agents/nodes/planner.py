@@ -24,9 +24,9 @@ import logfire
 from app.agents.state import AgentState
 from app.llm import AllTargetsFailed, router
 
-_PROMPT = """You are the planning step of a veterinary research assistant. Its knowledge base is a \
-corpus of peer-reviewed papers on cattle and buffalo disease (haemoprotozoal diseases, brucellosis, \
-lumpy skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health).
+_PROMPT = """You are the planning step of a cattle and buffalo health assistant. Its knowledge base \
+is a corpus of peer-reviewed papers on bovine disease (haemoprotozoal diseases, brucellosis, lumpy \
+skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health).
 
 CONVERSATION SO FAR:
 {history}
@@ -34,18 +34,28 @@ CONVERSATION SO FAR:
 LATEST USER MESSAGE:
 "{message}"
 
-Decide which applies:
+Classify the message as exactly one of:
 
-- CONVERSATIONAL — the message is small talk, a thank-you, a meta-question about the conversation, \
-or can be answered entirely from the conversation above without consulting any paper.
-- RESEARCH — answering needs evidence from the papers.
+- CONVERSATIONAL — small talk, a thank-you, or a question answerable entirely from the conversation \
+above without consulting any paper.
+- SYMPTOM — the person is describing a problem with their own animal and wants practical help. \
+Examples: "my cow has stopped eating", "milk production has dropped", "she has a fever", "there is \
+swelling on the leg". This includes short replies that answer earlier follow-up questions about a \
+sick animal.
+- RESEARCH — a factual or academic question about the literature. Examples: "what is the prevalence \
+of theileriosis in India", "which season has the highest incidence", "what did the study find".
 
-If RESEARCH, also write a self-contained search query: resolve every pronoun and ellipsis against \
-the conversation, keep the technical terms the papers would actually use, and drop conversational \
-filler. Do not invent details that were never mentioned.
+Then write a self-contained search query for the knowledge base:
+- Resolve every pronoun and ellipsis against the conversation.
+- Use plain descriptive terms a veterinary paper would use.
+- Write it as natural language, NOT as a boolean expression. Do not use AND, OR, quotes or brackets \
+— the search is semantic, so operators only add noise.
+- For SYMPTOM, describe the clinical signs rather than repeating the farmer's phrasing. Example: \
+"my cow won't eat and seems weak" becomes "cattle anorexia loss of appetite weakness causes".
+- Do not invent details that were never mentioned.
 
 Reply in exactly this format and nothing else:
-INTENT: <CONVERSATIONAL or RESEARCH>
+INTENT: <CONVERSATIONAL or SYMPTOM or RESEARCH>
 QUERY: <the search query, or NONE for CONVERSATIONAL>"""
 
 
@@ -60,28 +70,43 @@ def _format_history(messages: list[dict], limit: int = 6) -> str:
     )
 
 
+# Boolean operators are meaningless to a vector search and dilute the embedding,
+# but models reach for PubMed syntax the moment they see a research corpus.
+_BOOLEAN_NOISE = re.compile(r"\b(AND|OR|NOT)\b|[()\[\]\"]")
+
+
+def _clean_query(query: str) -> str:
+    cleaned = _BOOLEAN_NOISE.sub(" ", query)
+    return re.sub(r"\s{2,}", " ", cleaned).strip(" -:") or query
+
+
 def _parse(raw: str, fallback_query: str) -> tuple[str, str]:
     """Pull INTENT/QUERY out of the model output, tolerating format drift."""
-    intent_match = re.search(r"INTENT:\s*(CONVERSATIONAL|RESEARCH)", raw, re.IGNORECASE)
+    intent_match = re.search(r"INTENT:\s*(CONVERSATIONAL|SYMPTOM|RESEARCH)", raw, re.IGNORECASE)
     query_match = re.search(r"QUERY:\s*(.+)", raw, re.IGNORECASE)
 
     intent = (intent_match.group(1).lower() if intent_match else "")
     query = query_match.group(1).strip().strip('"') if query_match else ""
 
-    if not intent:
+    if intent not in ("conversational", "symptom", "research"):
         # No parseable intent: default to research. A needless retrieval is a
         # far cheaper mistake than answering a factual question with no evidence.
         intent = "research"
 
-    if intent == "research" and (not query or query.upper() == "NONE"):
-        query = fallback_query
+    if intent != "conversational":
+        if not query or query.upper() == "NONE":
+            query = fallback_query
+        query = _clean_query(query)
 
-    return ("conversational" if intent == "conversational" else "research"), query
+    return intent, query
 
 
 def planner_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
-    user_message = str(messages[-1]["content"]) if messages else state.get("original_query", "")
+    # The translator ran first, so this is English regardless of what was typed.
+    user_message = state.get("query_en") or (
+        str(messages[-1]["content"]) if messages else state.get("original_query", "")
+    )
     history = _format_history(messages)
 
     with logfire.span("Planner", query=user_message[:120]):
@@ -102,18 +127,20 @@ def planner_node(state: AgentState) -> dict:
             logfire.warning("Planner unavailable ({err}) — using the raw query", err=str(exc)[:200])
             intent, search_query = "research", user_message
 
+        base_plan = state.get("plan", [])
+
         if intent == "conversational":
             return {
                 "intent": "conversational",
                 "search_query": "",
                 "documents": [],
                 "status": "Answering from conversation memory",
-                "plan": ["Intent: conversational — no retrieval needed"],
+                "plan": base_plan + ["Intent: conversational — no retrieval needed"],
             }
 
         return {
-            "intent": "research",
+            "intent": intent,
             "search_query": search_query,
-            "status": f"Searching the literature for: {search_query}",
-            "plan": [f"Intent: research", f"Search query: {search_query}"],
+            "status": f"Looking this up: {search_query}",
+            "plan": base_plan + [f"Intent: {intent}", f"Search query: {search_query}"],
         }

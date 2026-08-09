@@ -87,6 +87,16 @@ class Settings:
     GROQ_PRIMARY_MODEL: str = field(default_factory=lambda: _str("GROQ_PRIMARY_MODEL", "llama-3.3-70b-versatile"))
     GROQ_FAST_MODEL: str = field(default_factory=lambda: _str("GROQ_FAST_MODEL", "llama-3.1-8b-instant"))
 
+    # ── Per-feature Groq keys ─────────────────────────────────────────────────
+    # Each pipeline stage can own a key so one busy stage cannot rate-limit the
+    # others. Any of these left blank simply falls back to GROQ_API_KEY, so the
+    # system works with one key and gets more headroom with four.
+    GROQ_TRANSLATE_API_KEY: str = field(default_factory=lambda: _str("GROQ_TRANSLATE_API_KEY"))
+    GROQ_CLARIFIER_API_KEY: str = field(default_factory=lambda: _str("GROQ_CLARIFIER_API_KEY"))
+    GROQ_ADVISOR_API_KEY: str = field(default_factory=lambda: _str("GROQ_ADVISOR_API_KEY"))
+    # Translation is mechanical; a small model does it well and costs far less.
+    GROQ_TRANSLATE_MODEL: str = field(default_factory=lambda: _str("GROQ_TRANSLATE_MODEL", "llama-3.1-8b-instant"))
+
     # ── Qdrant ────────────────────────────────────────────────────────────────
     QDRANT_URL: str = field(
         default_factory=lambda: _str("QDRANT_CLUSTER_ENDPOINT") or _str("QDRANT_URL", "http://localhost:6333")
@@ -131,6 +141,17 @@ class Settings:
     MAX_REFINEMENTS: int = field(default_factory=lambda: _int("MAX_REFINEMENTS", 1))
     MAX_CONTEXT_CHARS: int = field(default_factory=lambda: _int("MAX_CONTEXT_CHARS", 18000))
     GUARDRAILS_MODE: str = field(default_factory=lambda: _str("GUARDRAILS_MODE", "fast").lower())
+
+    # ── Consumer assistant behaviour ──────────────────────────────────────────
+    ENABLE_TRANSLATION: bool = field(default_factory=lambda: _bool("ENABLE_TRANSLATION", True))
+    ENABLE_CLARIFICATION: bool = field(default_factory=lambda: _bool("ENABLE_CLARIFICATION", True))
+    # How many times in a row the assistant may ask follow-up questions before it
+    # must answer with whatever it has. 1 keeps the conversation moving.
+    MAX_CLARIFICATION_ROUNDS: int = field(default_factory=lambda: _int("MAX_CLARIFICATION_ROUNDS", 1))
+    MAX_FOLLOW_UP_QUESTIONS: int = field(default_factory=lambda: _int("MAX_FOLLOW_UP_QUESTIONS", 4))
+    # Farmers get plain advice; researchers get [n] citations. Turning this on
+    # puts citation markers into consumer answers too.
+    SHOW_CITATIONS_IN_ADVICE: bool = field(default_factory=lambda: _bool("SHOW_CITATIONS_IN_ADVICE", False))
     LLM_CACHE_ENABLED: bool = field(default_factory=lambda: _bool("LLM_CACHE_ENABLED", True))
     LLM_CACHE_TTL: int = field(default_factory=lambda: _int("LLM_CACHE_TTL", 900))
 
@@ -172,6 +193,21 @@ class Settings:
     @property
     def qdrant_is_local(self) -> bool:
         return "localhost" in self.QDRANT_URL or "127.0.0.1" in self.QDRANT_URL
+
+    def feature_key(self, feature: str) -> str:
+        """
+        Dedicated Groq key for a pipeline stage, or "" if it has none.
+
+        Returning "" (rather than the shared key) matters: the router uses this
+        only to decide whether to *prepend* a dedicated target. The shared keys
+        are always appended after it, so a stage with no key of its own still
+        gets the full fallback chain.
+        """
+        return {
+            "translate": self.GROQ_TRANSLATE_API_KEY,
+            "clarifier": self.GROQ_CLARIFIER_API_KEY,
+            "advisor": self.GROQ_ADVISOR_API_KEY,
+        }.get(feature, "")
 
     @property
     def cors_origins(self) -> list[str]:
@@ -251,7 +287,12 @@ class Settings:
             "rerank_top_n": self.RERANK_TOP_N,
             "guardrails_mode": self.GUARDRAILS_MODE,
             "self_correction": self.ENABLE_SELF_CORRECTION,
+            "translation": self.ENABLE_TRANSLATION,
+            "clarification": self.ENABLE_CLARIFICATION,
             "groq_keys_configured": sum(bool(k) for k in (self.GROQ_API_KEY, self.GROQ_FALLBACK_API_KEY)),
+            "dedicated_feature_keys": [
+                name for name in ("translate", "clarifier", "advisor") if self.feature_key(name)
+            ],
             "gemini_configured": bool(self.GEMINI_API_KEY),
         }
 

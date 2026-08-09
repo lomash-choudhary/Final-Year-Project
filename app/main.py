@@ -91,6 +91,18 @@ class QueryResponse(BaseModel):
     llm: dict = {}
     elapsed_ms: int = 0
 
+    # ── consumer-facing fields ────────────────────────────────────────────────
+    # Language the user wrote in; the answer is returned in the same one.
+    language: str = "en"
+    # "home_care" | "vet_soon" | "vet_now" | "info" — lets a UI badge urgency
+    # without parsing the prose.
+    care_level: str | None = None
+    # Populated when the assistant needs more detail before it can advise. The
+    # questions are also embedded in `answer`, so a plain chat UI needs no
+    # special handling — this field is for clients that want to render chips.
+    follow_up_questions: list[str] = []
+    awaiting_answer: bool = False
+
 
 @app.get("/")
 def root() -> dict:
@@ -193,11 +205,17 @@ def query(request: QueryRequest) -> QueryResponse:
         initial_state = {
             "messages": [{"role": "user", "content": question}],
             "original_query": question,
+            "query_en": "",          # filled by translate_in
             "search_query": question,
             "documents": [],
             "plan": [],
             "refinements": 0,
+            "follow_up_questions": [],
+            "care_level": "",
             "status": "starting",
+            # NOT reset here: `awaiting_clarification` and `clarification_rounds`
+            # must survive from the previous turn, because that is how the
+            # clarifier knows this message answers its questions.
         }
 
         try:
@@ -231,13 +249,25 @@ def query(request: QueryRequest) -> QueryResponse:
             refinements=final.get("refinements", 0),
         )
 
+        care_level = final.get("care_level") or None
+        awaiting = bool(final.get("awaiting_clarification"))
+
+        # Sources are returned for research answers (and for the eval harness),
+        # but suppressed for farmer-facing advice: that answer carries no
+        # citation markers, so a sources list would be unattached noise.
+        sources = [] if final.get("intent") == "symptom" else final.get("documents", [])
+
         return QueryResponse(
             question=question,
             answer=final.get("final_answer", ""),
             thread_id=thread_id,
             status=final.get("status", "done"),
             thought_process=final.get("plan", []),
-            sources=final.get("documents", []),
+            sources=sources,
             llm=final.get("llm_meta", {}),
             elapsed_ms=elapsed,
+            language=final.get("language", "en"),
+            care_level=care_level,
+            follow_up_questions=final.get("follow_up_questions", []),
+            awaiting_answer=awaiting,
         )

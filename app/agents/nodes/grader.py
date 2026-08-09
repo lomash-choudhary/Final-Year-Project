@@ -20,6 +20,8 @@ Bounded by MAX_REFINEMENTS (default 1) so a bad query can never loop forever.
 
 from __future__ import annotations
 
+import re
+
 import logfire
 
 from app.agents.state import AgentState
@@ -49,19 +51,60 @@ VERDICT: <YES or NO>
 QUERY: <improved search query, or NONE if the verdict is YES>"""
 
 
-def _parse(raw: str) -> tuple[bool, str]:
+_BOOLEAN_NOISE = re.compile(r"\b(AND|OR|NOT)\b|[()\[\]]")
+
+# Small models often answer "QUERY: x" and then keep talking — '... can be
+# improved to "y" or "z" to better match terminology'. Taking the whole line
+# verbatim turns that commentary into the next search query.
+_EXPLANATION = re.compile(
+    r"\b(can be improved|could be|would be|better match|to better|instead of|i suggest|"
+    r"this (query|search)|note:|explanation:)",
+    re.IGNORECASE,
+)
+
+
+def _clean_query(query: str, fallback: str, max_words: int = 16) -> str:
+    """Reduce the model's QUERY line to something a vector search can use."""
+    text = query.strip().strip('"').strip("'")
+
+    # Cut at the first sign the model started explaining itself.
+    match = _EXPLANATION.search(text)
+    if match:
+        text = text[: match.start()]
+
+    # A stray closing quote marks the end of the intended query.
+    for quote in ('"', "'"):
+        if text.count(quote) == 1:
+            text = text.split(quote)[0]
+
+    text = _BOOLEAN_NOISE.sub(" ", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" .,:;-")
+
+    words = text.split()
+    if len(words) > max_words:
+        text = " ".join(words[:max_words])
+
+    # Too short to be a real query means the parse failed; keep what we had.
+    return text if len(text.split()) >= 2 else fallback
+
+
+def _parse(raw: str, fallback: str = "") -> tuple[bool, str]:
     verdict_line = ""
     query = ""
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.upper().startswith("VERDICT:"):
             verdict_line = stripped.split(":", 1)[1].strip().upper()
-        elif stripped.upper().startswith("QUERY:"):
-            query = stripped.split(":", 1)[1].strip().strip('"')
+        elif stripped.upper().startswith("QUERY:") and not query:
+            # `not query` keeps the first QUERY line; later lines are commentary.
+            query = stripped.split(":", 1)[1].strip()
 
     sufficient = not verdict_line.startswith("NO")
-    if query.upper() == "NONE":
+    if query.upper().startswith("NONE"):
         query = ""
+    elif query:
+        query = _clean_query(query, fallback)
+
     return sufficient, query
 
 
@@ -124,7 +167,7 @@ def grade_node(state: AgentState) -> dict:
                 max_tokens=160,
                 feature="grader",
             )
-            sufficient, better_query = _parse(response.content)
+            sufficient, better_query = _parse(response.content, fallback=question)
         except AllTargetsFailed as exc:
             logfire.warning("Grader unavailable ({err}) — accepting context", err=str(exc)[:200])
             return {
