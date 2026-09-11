@@ -61,6 +61,12 @@ def _bool(name: str, default: bool) -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def _csv(name: str) -> tuple[str, ...]:
+    # Comma-separated list, used for the ordered embedding-model probe list.
+    # Blank entries are dropped so a trailing comma in .env is harmless.
+    return tuple(item.strip() for item in _str(name).split(",") if item.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     # ── identity ──────────────────────────────────────────────────────────────
@@ -68,24 +74,29 @@ class Settings:
     ENVIRONMENT: str = field(default_factory=lambda: _str("LOGFIRE_ENVIRONMENT", "dev"))
 
     # ── Gemini (embeddings primary, chat last-resort) ──────────────────────────
+    # No model identifier in this file has a hardcoded default. Model names are
+    # provider inventory, not application logic: they get renamed, deprecated and
+    # decommissioned on the provider's schedule, and a stale literal baked into
+    # the source is a 404 that looks like a bug. Every model below comes from
+    # .env (documented in .env.example); blank means "this tier is unavailable",
+    # and `validate()` says so out loud instead of guessing a replacement.
     GEMINI_API_KEY: str = field(default_factory=lambda: _str("GEMINI_API_KEY"))
     GEMINI_EMBEDDING_MODEL: str = field(default_factory=lambda: _str("GEMINI_EMBEDDING_MODEL"))
-    GEMINI_CHAT_MODEL: str = field(default_factory=lambda: _str("GEMINI_CHAT_MODEL", "gemini-2.5-flash"))
+    GEMINI_CHAT_MODEL: str = field(default_factory=lambda: _str("GEMINI_CHAT_MODEL"))
 
     # Probed in order when GEMINI_EMBEDDING_MODEL is blank. The first model the
     # key can actually reach wins — different Google accounts have different
-    # model availability, and hardcoding one is the #1 cause of a dead ingest.
-    GEMINI_EMBEDDING_CANDIDATES: tuple[str, ...] = (
-        "models/gemini-embedding-001",
-        "models/text-embedding-004",
-        "models/embedding-001",
+    # model availability, and pinning one is the #1 cause of a dead ingest.
+    # Comma-separated in .env; blank means "only GEMINI_EMBEDDING_MODEL".
+    GEMINI_EMBEDDING_CANDIDATES: tuple[str, ...] = field(
+        default_factory=lambda: _csv("GEMINI_EMBEDDING_CANDIDATES")
     )
 
     # ── Groq (reasoning) ──────────────────────────────────────────────────────
     GROQ_API_KEY: str = field(default_factory=lambda: _str("GROQ_API_KEY"))
     GROQ_FALLBACK_API_KEY: str = field(default_factory=lambda: _str("GROQ_FALLBACK_API_KEY"))
-    GROQ_PRIMARY_MODEL: str = field(default_factory=lambda: _str("GROQ_PRIMARY_MODEL", "llama-3.3-70b-versatile"))
-    GROQ_FAST_MODEL: str = field(default_factory=lambda: _str("GROQ_FAST_MODEL", "llama-3.1-8b-instant"))
+    GROQ_PRIMARY_MODEL: str = field(default_factory=lambda: _str("GROQ_PRIMARY_MODEL"))
+    GROQ_FAST_MODEL: str = field(default_factory=lambda: _str("GROQ_FAST_MODEL"))
 
     # ── Per-feature Groq keys ─────────────────────────────────────────────────
     # Each pipeline stage can own a key so one busy stage cannot rate-limit the
@@ -95,7 +106,8 @@ class Settings:
     GROQ_CLARIFIER_API_KEY: str = field(default_factory=lambda: _str("GROQ_CLARIFIER_API_KEY"))
     GROQ_ADVISOR_API_KEY: str = field(default_factory=lambda: _str("GROQ_ADVISOR_API_KEY"))
     # Translation is mechanical; a small model does it well and costs far less.
-    GROQ_TRANSLATE_MODEL: str = field(default_factory=lambda: _str("GROQ_TRANSLATE_MODEL", "llama-3.1-8b-instant"))
+    # Blank falls back to GROQ_FAST_MODEL — another configured value, never a literal.
+    GROQ_TRANSLATE_MODEL: str = field(default_factory=lambda: _str("GROQ_TRANSLATE_MODEL"))
 
     # ── Qdrant ────────────────────────────────────────────────────────────────
     QDRANT_URL: str = field(
@@ -111,9 +123,7 @@ class Settings:
 
     # ── embedding pipeline ────────────────────────────────────────────────────
     EMBEDDING_PROVIDER: str = field(default_factory=lambda: _str("EMBEDDING_PROVIDER", "auto").lower())
-    LOCAL_EMBEDDING_MODEL: str = field(
-        default_factory=lambda: _str("LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
-    )
+    LOCAL_EMBEDDING_MODEL: str = field(default_factory=lambda: _str("LOCAL_EMBEDDING_MODEL"))
     EMBED_BATCH_SIZE: int = field(default_factory=lambda: _int("EMBED_BATCH_SIZE", 16))
     # TEXTS per minute, not requests per minute. Gemini's free embedding quota is
     # `embed_content_free_tier_requests: limit 100`, and it is charged per text
@@ -134,6 +144,9 @@ class Settings:
     # ── retrieval ─────────────────────────────────────────────────────────────
     RETRIEVAL_TOP_K: int = field(default_factory=lambda: _int("RETRIEVAL_TOP_K", 20))
     RERANK_TOP_N: int = field(default_factory=lambda: _int("RERANK_TOP_N", 5))
+    # FlashRank cross-encoder checkpoint. Blank means "whatever FlashRank ships
+    # as its own default" — the library owns that name, so we do not copy it here.
+    RERANKER_MODEL: str = field(default_factory=lambda: _str("RERANKER_MODEL"))
     MIN_RELEVANCE_SCORE: float = field(default_factory=lambda: _float("MIN_RELEVANCE_SCORE", 0.0))
 
     # ── agent ─────────────────────────────────────────────────────────────────
@@ -167,6 +180,12 @@ class Settings:
     # ── UI / evals ────────────────────────────────────────────────────────────
     BACKEND_URL: str = field(default_factory=lambda: _str("BACKEND_URL", "http://localhost:8000"))
     JUDGE_GROQ: str = field(default_factory=lambda: _str("JUDGE_GROQ"))
+    # RAGAS judge. Blank falls back to GROQ_FAST_MODEL: judging is a cheap,
+    # mechanical call and the 70B quota is needed by the live app.
+    JUDGE_MODEL: str = field(default_factory=lambda: _str("JUDGE_MODEL"))
+    # Local sentence-transformers model RAGAS uses for the embedding-based
+    # metrics. Runs offline, costs no quota — but the name still comes from .env.
+    EVAL_EMBEDDING_MODEL: str = field(default_factory=lambda: _str("EVAL_EMBEDDING_MODEL"))
 
     # Browser origins allowed to call this API. Comma-separated, or "*" for any.
     # Defaults to "*" so a new frontend works without configuration; set it to
@@ -189,6 +208,30 @@ class Settings:
     def judge_api_key(self) -> str:
         """Eval judge key, falling back to the main Groq key."""
         return self.JUDGE_GROQ or self.GROQ_API_KEY
+
+    @property
+    def judge_model(self) -> str:
+        """Eval judge model, falling back to the cheap tier's model."""
+        return self.JUDGE_MODEL or self.GROQ_FAST_MODEL
+
+    @property
+    def translate_model(self) -> str:
+        """Model for the dedicated translation target, falling back to the fast tier."""
+        return self.GROQ_TRANSLATE_MODEL or self.GROQ_FAST_MODEL
+
+    @property
+    def gemini_embedding_candidates(self) -> list[str]:
+        """
+        Ordered probe list for Gemini embeddings.
+
+        An explicit GEMINI_EMBEDDING_MODEL pins one model and skips the probe.
+        Otherwise the candidates from .env are tried in order. Empty means the
+        Gemini tier has no model to try at all, and embedding.py says so rather
+        than inventing one.
+        """
+        if self.GEMINI_EMBEDDING_MODEL:
+            return [self.GEMINI_EMBEDDING_MODEL]
+        return list(self.GEMINI_EMBEDDING_CANDIDATES)
 
     @property
     def qdrant_is_local(self) -> bool:
@@ -242,6 +285,18 @@ class Settings:
             problems.append("QDRANT_API_KEY is empty but QDRANT_CLUSTER_ENDPOINT points at a remote cluster.")
 
         if scope == "ingestion":
+            # Model names are never defaulted in code, so a blank one is a real
+            # configuration error — catch it here instead of inside the SDK.
+            if self.EMBEDDING_PROVIDER in ("auto", "gemini") and not self.gemini_embedding_candidates:
+                problems.append(
+                    "No Gemini embedding model configured — set GEMINI_EMBEDDING_MODEL, or "
+                    "GEMINI_EMBEDDING_CANDIDATES to a comma-separated probe list (see .env.example)."
+                )
+            if self.EMBEDDING_PROVIDER in ("auto", "local") and not self.LOCAL_EMBEDDING_MODEL:
+                problems.append(
+                    "LOCAL_EMBEDDING_MODEL is empty — the offline embedding fallback has no model "
+                    "to load (see .env.example)."
+                )
             if self.EMBEDDING_PROVIDER in ("auto", "gemini") and not self.GEMINI_API_KEY:
                 if self.EMBEDDING_PROVIDER == "gemini":
                     problems.append("EMBEDDING_PROVIDER=gemini but GEMINI_API_KEY is empty.")
@@ -261,6 +316,19 @@ class Settings:
         if scope in ("api", "evals"):
             if not self.GROQ_API_KEY and not self.GEMINI_API_KEY:
                 problems.append("No LLM key found — set GROQ_API_KEY (preferred) or GEMINI_API_KEY.")
+            # A key without a model name is a dead target: the router drops it and
+            # the fallback ladder quietly gets shorter. Say so before that happens.
+            if self.GROQ_API_KEY or self.GROQ_FALLBACK_API_KEY:
+                if not self.GROQ_PRIMARY_MODEL:
+                    problems.append("GROQ_PRIMARY_MODEL is empty — the quality tier has no model (see .env.example).")
+                if not self.GROQ_FAST_MODEL:
+                    problems.append("GROQ_FAST_MODEL is empty — the fast tier has no model (see .env.example).")
+            if self.GEMINI_API_KEY and not self.GEMINI_CHAT_MODEL:
+                problems.append(
+                    "GEMINI_CHAT_MODEL is empty — the last-resort Gemini chat fallback is disabled."
+                )
+            if not (self.GROQ_PRIMARY_MODEL or self.GROQ_FAST_MODEL or self.GEMINI_CHAT_MODEL):
+                problems.append("No chat model configured at all — every LLM call will fail.")
             if self.GUARDRAILS_MODE not in ("off", "fast", "full"):
                 problems.append(f"GUARDRAILS_MODE must be one of off|fast|full (got '{self.GUARDRAILS_MODE}').")
             if self.RERANK_TOP_N > self.RETRIEVAL_TOP_K:
@@ -269,8 +337,15 @@ class Settings:
                     "the reranker cannot return more documents than were retrieved."
                 )
 
-        if scope == "evals" and not self.judge_api_key:
-            problems.append("Neither JUDGE_GROQ nor GROQ_API_KEY is set — the RAGAS judge has no LLM.")
+        if scope == "evals":
+            if not self.judge_api_key:
+                problems.append("Neither JUDGE_GROQ nor GROQ_API_KEY is set — the RAGAS judge has no LLM.")
+            if not self.judge_model:
+                problems.append("Neither JUDGE_MODEL nor GROQ_FAST_MODEL is set — the RAGAS judge has no model.")
+            if not self.EVAL_EMBEDDING_MODEL:
+                problems.append(
+                    "EVAL_EMBEDDING_MODEL is empty — RAGAS's embedding-based metrics have no model to load."
+                )
 
         return problems
 
@@ -281,6 +356,16 @@ class Settings:
             "qdrant_url": self.QDRANT_URL,
             "qdrant_collection": self.QDRANT_COLLECTION,
             "embedding_provider": self.EMBEDDING_PROVIDER,
+            "models": {
+                "groq_primary": self.GROQ_PRIMARY_MODEL or None,
+                "groq_fast": self.GROQ_FAST_MODEL or None,
+                "groq_translate": self.translate_model or None,
+                "gemini_chat": self.GEMINI_CHAT_MODEL or None,
+                "gemini_embedding": self.GEMINI_EMBEDDING_MODEL or None,
+                "gemini_embedding_candidates": list(self.GEMINI_EMBEDDING_CANDIDATES),
+                "local_embedding": self.LOCAL_EMBEDDING_MODEL or None,
+                "reranker": self.RERANKER_MODEL or "flashrank-default",
+            },
             "chunk_size": self.CHUNK_SIZE,
             "chunk_overlap": self.CHUNK_OVERLAP,
             "retrieval_top_k": self.RETRIEVAL_TOP_K,

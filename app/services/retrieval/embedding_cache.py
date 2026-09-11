@@ -5,9 +5,10 @@ The single most expensive resource in this project is free-tier Gemini quota.
 Without a cache, every `--wipe` re-ingest spends it again on text that has not
 changed. With it, a re-index of an unchanged corpus costs zero API calls.
 
-The cache key includes provider, model *and* dimension. A vector produced by
-gemini-embedding-001 is meaningless to all-mpnet-base-v2, so entries must never
-collide across backends.
+The cache key includes provider, model *and* dimension. A vector produced by the
+hosted embedding model is meaningless to the local one, so entries must never
+collide across backends — which is also why the key stores whatever model name
+came from config rather than assuming a fixed one.
 """
 
 from __future__ import annotations

@@ -120,12 +120,12 @@ flowchart LR
     CACHE -->|hit| DONE["Return · 0 tokens"]
     CACHE -->|miss| T1
 
-    T1["Groq key 1<br/>llama-3.3-70b"] -->|429 / 5xx| T1R["Retry once<br/>backoff + jitter"]
+    T1["Groq key 1<br/>GROQ_PRIMARY_MODEL"] -->|429 / 5xx| T1R["Retry once<br/>backoff + jitter"]
     T1R -->|still failing| T2
-    T1 -->|401 / 404| T2["Groq key 2<br/>llama-3.3-70b"]
-    T2 -->|fails| T3["Groq key 1<br/>llama-3.1-8b"]
-    T3 -->|fails| T4["Groq key 2<br/>llama-3.1-8b"]
-    T4 -->|fails| T5["Gemini Flash"]
+    T1 -->|401 / 404| T2["Groq key 2<br/>GROQ_PRIMARY_MODEL"]
+    T2 -->|fails| T3["Groq key 1<br/>GROQ_FAST_MODEL"]
+    T3 -->|fails| T4["Groq key 2<br/>GROQ_FAST_MODEL"]
+    T4 -->|fails| T5["Gemini<br/>GEMINI_CHAT_MODEL"]
     T5 -->|fails| ERR["AllTargetsFailed<br/>surfaced to the user"]
 
     T1 -->|ok| DONE

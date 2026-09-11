@@ -11,7 +11,9 @@ The most common misreading of the free-tier plan. Groq serves chat/completion mo
 
 ```
 EMBEDDINGS   Gemini  →  local sentence-transformers
-REASONING    Groq key 1 · 70B  →  Groq key 2 · 70B  →  Groq · 8B  →  Gemini Flash
+REASONING    Groq key 1 · GROQ_PRIMARY_MODEL  →  Groq key 2 · GROQ_PRIMARY_MODEL
+          →  Groq key 1 · GROQ_FAST_MODEL     →  Groq key 2 · GROQ_FAST_MODEL
+          →  Gemini · GEMINI_CHAT_MODEL
 ```
 
 Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning side.
@@ -225,5 +227,91 @@ if everything reads through `settings`.
 ## 20. Embedding cache keys include the model
 
 Cache keys are `sha256(provider|model|dim|text)`. Switching models does not produce stale hits —
-it produces a cold cache and a full re-embed. That is correct: a vector from
-`gemini-embedding-001` is meaningless to `all-mpnet-base-v2`.
+it produces a cold cache and a full re-embed. That is correct: a vector from the hosted embedding
+model is meaningless to the local one. The `model` component is whatever name config resolved to,
+which is why changing `GEMINI_EMBEDDING_MODEL` in `.env` invalidates the cache automatically.
+
+---
+
+## 21. No model name is hardcoded anywhere — `.env` is the only source
+
+Not as a constant, not as a `_str(..., "default")`, not as a fallback in an `except` branch. Every
+model identifier in the system — `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GROQ_TRANSLATE_MODEL`,
+`GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_CANDIDATES`,
+`LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL` — is read from
+`.env` through `settings`.
+
+**Why.** Model names are provider inventory, not application logic. Groq decommissions checkpoints
+on a few weeks' notice; Google renames embedding models between releases. A literal baked into the
+source turns that announcement into a 404 at request time, discovered by a user, in a file nobody
+thought to grep. Worse, a *default* hides the problem: the variable looks configurable, but a typo
+in `.env` silently falls back to a name that may itself be dead.
+
+**The trade-off, stated plainly.** A blank variable now genuinely disables that tier instead of
+substituting something. That is the point — it fails visibly:
+
+- `_build_chain()` drops any target whose model is blank, and logs an error if that empties the
+  ladder; `chain()` then raises `AllTargetsFailed`, which every node already handles by degrading.
+- `_build_gemini()` returns `None` (skipping the tier) when no embedding candidate is configured;
+  `_build_local()` raises `EmbeddingError`.
+- `evals.metrics` refuses to start without a judge model and an eval embedding model.
+- `settings.validate()` reports every blank name for the relevant scope, so
+  `python -m scripts.doctor` catches it before an API call is spent. The doctor prints the full
+  resolved set under **Models**, and `/health` reports it as `config.models`.
+
+Two names fall back to *another configured value*, never to a literal: `GROQ_TRANSLATE_MODEL` and
+`JUDGE_MODEL` both fall back to `GROQ_FAST_MODEL`. One name is deliberately absent:
+`RERANKER_MODEL` left blank hands the choice to FlashRank's own default, because that checkpoint
+belongs to the library, not to this project.
+
+When a model dies, the fix is one line in `.env` and a restart — no code change, no redeploy of
+logic, no grep.
+
+---
+
+## 22. `GROQ_FAST_MODEL` must not be a reasoning model
+
+The fast tier runs the mechanical nodes — planner, grader, clarifier, translator — and each caps
+`max_tokens` tightly, because these nodes emit two or three lines of structured text and fire on
+every single query:
+
+| Node | `max_tokens` | Expected reply |
+|---|---|---|
+| grader | 160 | `VERDICT: …` / `QUERY: …` |
+| planner | 180 | `INTENT: …` / `QUERY: …` |
+| clarifier | 300 | follow-up questions |
+| translator | 400 | translated text |
+
+A reasoning model spends that budget on its hidden channel *before* emitting any content. Measured
+on the real planner prompt at its real cap of 180:
+
+```
+openai/gpt-oss-20b    finish_reason="length"  completion_tokens=180  content=""
+qwen/qwen3.8-27b      finish_reason="stop"    completion_tokens=19   content="INTENT: RESEARCH\nQUERY: …"
+```
+
+**Why this is worse than a crash.** The `_parse` helpers are deliberately tolerant (gotcha 5 in
+`AGENTS.md §7`): given an empty string the planner returns `("research", raw_query)` and the grader
+returns its default verdict. Nothing raises, nothing logs an error, and `AllTargetsFailed` never
+fires because the call *succeeded*. The graph keeps answering — with the planner and grader
+silently reduced to constants on every request. There is no signal in `/health`, in
+`thought_process`, or in the Logfire span tree.
+
+`GROQ_PRIMARY_MODEL` has no such constraint: the responder and advisor pass `max_tokens=None`, so a
+reasoning model is a good choice there and is what the quality tier uses.
+
+**Before setting a new `GROQ_FAST_MODEL`**, confirm it returns a parseable body within 160 tokens:
+
+```bash
+curl -s https://api.groq.com/openai/v1/chat/completions \
+  -H "Authorization: Bearer $GROQ_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"<candidate>","messages":[{"role":"user","content":"Reply with the single word: ok"}],"max_tokens":160}' \
+  | jq '.choices[0] | {finish_reason, content: .message.content}'
+```
+
+`finish_reason: "length"` with an empty `content` disqualifies the model for the fast tier.
+
+Note that Groq's `GET /v1/models` and `/chat/completions` sit behind Cloudflare, which returns
+`403 error code: 1010` to clients sending no `User-Agent` (Python's bare `urllib` among them). That
+403 is a client-fingerprint rejection, **not** an invalid key — resend with a normal `User-Agent`
+before concluding anything about your credentials.

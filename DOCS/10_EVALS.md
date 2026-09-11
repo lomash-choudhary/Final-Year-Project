@@ -85,7 +85,8 @@ Groq's free tier is **TPM**-limited, not only RPM-limited. The runner is paced a
 | Gap between metrics | 62 s | Full window reset |
 | Context truncation | 400 chars | An untruncated Faithfulness call over five 1500-char passages is ~8,000 tokens and is rejected outright |
 | Passages per sample | 2 | Same reason |
-| Judge model | `llama-3.1-8b-instant` | Cheaper per token than the 70B, and adequate for judging |
+| Judge model | `JUDGE_MODEL`, else `GROQ_FAST_MODEL` | The cheap tier is adequate for judging, and the big quota is needed by the live app. Like every model name in this project, it comes from `.env` — never from the source |
+| Judge embeddings | `EVAL_EMBEDDING_MODEL` | Local `sentence-transformers`, zero API cost. `evals.metrics` refuses to run when it is blank |
 | Judge key | `JUDGE_GROQ` | ~80 calls per full pass — enough to exhaust the quota your live app is using |
 
 Budget **10–15 minutes** for a full RAGAS pass. That is not slowness to fix; it is the cost of

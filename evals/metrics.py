@@ -35,7 +35,6 @@ import pandas as pd
 from app.config import settings
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-JUDGE_MODEL = settings.GROQ_FAST_MODEL
 
 # Calibrated for Groq's free on-demand tier (~6,000 TPM).
 COOLDOWN_BETWEEN_METRICS = 62
@@ -115,14 +114,25 @@ def _build_judge():
 
     # Groq exposes an OpenAI-compatible endpoint, so the OpenAI client works
     # against it directly with a different base_url.
+    # Model names come from .env (JUDGE_MODEL / EVAL_EMBEDDING_MODEL) like every
+    # other model in this project — nothing is defaulted to a literal here.
+    judge_model = settings.judge_model
+    if not judge_model:
+        raise RuntimeError(
+            "No judge model. Set JUDGE_MODEL (preferred) or GROQ_FAST_MODEL in .env."
+        )
+    embedding_model = settings.EVAL_EMBEDDING_MODEL
+    if not embedding_model:
+        raise RuntimeError(
+            "EVAL_EMBEDDING_MODEL is empty — RAGAS's embedding-based metrics have no model. "
+            "Set it in .env (see .env.example)."
+        )
+
     client = AsyncOpenAI(api_key=api_key, base_url=GROQ_BASE_URL)
-    judge_llm = llm_factory(JUDGE_MODEL, provider="openai", client=client)
+    judge_llm = llm_factory(judge_model, provider="openai", client=client)
 
     # Local embeddings for the metrics that need them — no API cost.
-    embeddings = HuggingFaceEmbeddings(
-        model="sentence-transformers/all-MiniLM-L6-v2",
-        use_api=False,
-    )
+    embeddings = HuggingFaceEmbeddings(model=embedding_model, use_api=False)
     return judge_llm, embeddings
 
 

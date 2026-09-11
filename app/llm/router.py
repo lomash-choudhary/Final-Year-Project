@@ -15,11 +15,16 @@ Groq enforces rate limits per (key, model). So a 429 on the 70B model with your
 primary key says nothing about the 8B model, or about your second key. The chain
 exploits both axes before giving up:
 
-    1. GROQ_API_KEY           + llama-3.3-70b-versatile   (best quality)
-    2. GROQ_FALLBACK_API_KEY  + llama-3.3-70b-versatile   (second free quota)
-    3. GROQ_API_KEY           + llama-3.1-8b-instant      (cheaper model, same key)
-    4. GROQ_FALLBACK_API_KEY  + llama-3.1-8b-instant
-    5. Gemini chat                                        (different provider entirely)
+    1. GROQ_API_KEY           + GROQ_PRIMARY_MODEL   (best quality)
+    2. GROQ_FALLBACK_API_KEY  + GROQ_PRIMARY_MODEL   (second free quota)
+    3. GROQ_API_KEY           + GROQ_FAST_MODEL      (cheaper model, same key)
+    4. GROQ_FALLBACK_API_KEY  + GROQ_FAST_MODEL
+    5. GEMINI_CHAT_MODEL                             (different provider entirely)
+
+Every model identifier comes from .env. Nothing here names a model: providers
+decommission checkpoints on their own schedule, and a literal in this file turns
+that into a 404 at request time instead of a config line you can edit. A tier
+whose model is blank is simply dropped from the ladder — see `_build_chain`.
 
 Anything below tier 1 is a degraded answer, so `fallback_used` is surfaced all
 the way to the UI rather than hidden. Silent degradation is how a system looks
@@ -140,15 +145,19 @@ def _build_chain(tier: str, feature: str = "") -> list[Target]:
         fallback_key = ""
 
     order = [(small, "fast"), (big, "quality")] if tier == "fast" else [(big, "quality"), (small, "fast")]
+    # A tier with no model configured is not a target. Dropping it here keeps the
+    # rest of the ladder intact rather than sending a request with model="".
+    order = [(model, tag) for model, tag in order if model]
 
     chain: list[Target] = []
 
     dedicated = settings.feature_key(feature) if feature else ""
-    if dedicated:
+    if dedicated and order:
         # Translation is mechanical, so it gets its own small model; the other
         # stages keep the tier's model choice.
-        model = settings.GROQ_TRANSLATE_MODEL if feature == "translate" else order[0][0]
-        chain.append(Target(f"groq-{feature}", "groq", model, dedicated))
+        model = settings.translate_model if feature == "translate" else order[0][0]
+        if model:
+            chain.append(Target(f"groq-{feature}", "groq", model, dedicated))
 
     for model, model_tag in order:
         if primary_key:
@@ -156,8 +165,18 @@ def _build_chain(tier: str, feature: str = "") -> list[Target]:
         if fallback_key:
             chain.append(Target(f"groq-fallback/{model_tag}", "groq", model, fallback_key))
 
-    if settings.GEMINI_API_KEY:
+    if settings.GEMINI_API_KEY and settings.GEMINI_CHAT_MODEL:
         chain.append(Target("gemini", "gemini", settings.GEMINI_CHAT_MODEL, settings.GEMINI_API_KEY))
+
+    if not chain:
+        # Reached when keys exist but no model name does. Silence here would
+        # surface three layers deep as an opaque SDK error on the first query.
+        logfire.error(
+            "LLM fallback chain is empty — no (key, model) pair is configured",
+            tier=tier, feature=feature or "-",
+            groq_primary_model=bool(big), groq_fast_model=bool(small),
+            gemini_chat_model=bool(settings.GEMINI_CHAT_MODEL),
+        )
 
     return chain
 
@@ -258,8 +277,10 @@ class LLMRouter:
                 built = _build_chain(tier, feature)
                 if not built:
                     raise AllTargetsFailed(
-                        "No LLM credentials configured. Set GROQ_API_KEY (free at "
-                        "https://console.groq.com/keys) or GEMINI_API_KEY in your .env."
+                        "No usable LLM target. A target needs both a key and a model name, and "
+                        "model names are never defaulted in code. Set GROQ_API_KEY (free at "
+                        "https://console.groq.com/keys) with GROQ_PRIMARY_MODEL / GROQ_FAST_MODEL, "
+                        "or GEMINI_API_KEY with GEMINI_CHAT_MODEL, in your .env (see .env.example)."
                     )
                 self._chains[cache_key] = built
                 logfire.info(

@@ -47,7 +47,9 @@ noise, and a cross-encoder alone cannot scan the corpus.
 
 ## FlashRank
 
-A quantised ONNX cross-encoder (`ms-marco-MiniLM-L-6-v2` by default) running on CPU.
+A quantised ONNX cross-encoder running on CPU. The checkpoint comes from `RERANKER_MODEL`; left
+blank, FlashRank picks its own default — the one model name this project does not name, because
+the library owns it.
 
 - No API key, no network at query time, no cost
 - ~10-50 ms for 20 passages on a laptop

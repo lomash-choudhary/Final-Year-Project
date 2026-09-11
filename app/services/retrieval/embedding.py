@@ -191,11 +191,16 @@ def _build_gemini() -> EmbeddingBackend | None:
         logfire.warning("langchain-google-genai not installed ({err})", err=str(exc))
         return None
 
-    candidates = (
-        [settings.GEMINI_EMBEDDING_MODEL]
-        if settings.GEMINI_EMBEDDING_MODEL
-        else list(settings.GEMINI_EMBEDDING_CANDIDATES)
-    )
+    # Names come from .env only — an explicit GEMINI_EMBEDDING_MODEL pins one,
+    # otherwise GEMINI_EMBEDDING_CANDIDATES is probed in order. Nothing is
+    # guessed: an empty list means this tier is unconfigured, not "use the usual one".
+    candidates = settings.gemini_embedding_candidates
+    if not candidates:
+        logfire.warning(
+            "No Gemini embedding model configured — set GEMINI_EMBEDDING_MODEL or "
+            "GEMINI_EMBEDDING_CANDIDATES in .env. Skipping the Gemini embedding tier."
+        )
+        return None
 
     for model_name in candidates:
         try:
@@ -262,6 +267,11 @@ def _build_local() -> EmbeddingBackend:
         ) from exc
 
     name = settings.LOCAL_EMBEDDING_MODEL
+    if not name:
+        raise EmbeddingError(
+            "LOCAL_EMBEDDING_MODEL is empty — the offline embedding backend has no model to "
+            "load. Set it in .env (see .env.example); model names are never defaulted in code."
+        )
     logfire.info("Loading local embedding model (first run downloads weights)", model=name)
     model = SentenceTransformer(name)
 

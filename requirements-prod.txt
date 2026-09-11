@@ -24,7 +24,7 @@ langgraph                     # the planner -> retriever -> grader -> responder 
 langchain-core                # message types used by the LLM router
 
 # --- LLM PROVIDERS (lazy-imported by app/llm/router.py) ---
-langchain-groq                # Groq: llama-3.3-70b / llama-3.1-8b
+langchain-groq                # Groq client; model names come from .env
 langchain-google-genai        # Gemini: query embeddings + last-resort chat fallback
 
 # --- RETRIEVAL ---

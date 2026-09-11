@@ -38,8 +38,9 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | Variable | Default | Notes |
 |---|---|---|
 | `EMBEDDING_PROVIDER` | `auto` | `auto` tries Gemini then falls back to a local model. `gemini` fails loudly instead. `local` never touches an API |
-| `GEMINI_EMBEDDING_MODEL` | *(blank)* | Blank means probe `gemini-embedding-001` → `text-embedding-004` → `embedding-001` and use the first your key can reach. Model availability differs per account, which is why this is probed rather than assumed |
-| `LOCAL_EMBEDDING_MODEL` | `sentence-transformers/all-mpnet-base-v2` | Downloads ~420 MB on first use, then runs offline forever |
+| `GEMINI_EMBEDDING_MODEL` | *(blank)* | Pins one embedding model. Blank means probe `GEMINI_EMBEDDING_CANDIDATES` in order and use the first your key can reach — model availability differs per account, which is why this is probed rather than assumed |
+| `GEMINI_EMBEDDING_CANDIDATES` | *(from `.env`)* | Comma-separated, ordered probe list. Only consulted when `GEMINI_EMBEDDING_MODEL` is blank. Both blank = the Gemini embedding tier is skipped entirely |
+| `LOCAL_EMBEDDING_MODEL` | *(from `.env`)* | Offline `sentence-transformers` fallback. Downloads its weights on first use, then runs offline forever. Required unless `EMBEDDING_PROVIDER = gemini` |
 | `EMBED_BATCH_SIZE` | `16` | Texts per Gemini request. Auto-halves on a batch-size rejection |
 | `EMBED_MAX_RPM` | `90` | **Texts per minute, not requests per minute.** Gemini charges `embed_content_free_tier_requests` per *text*: a batch of 16 costs 16 units, not 1. The free ceiling is 100. Keep this below it |
 | `EMBED_MAX_RETRIES` | `5` | Retries on 429. The provider's own `retryDelay` (typically ~55s) is parsed from the error and honoured — computed backoff alone tops out near 17s and just retries inside the same blocked minute |
@@ -89,14 +90,29 @@ Changing any of these requires a `--wipe` re-ingest to take effect on existing d
 
 ## Models
 
-| Variable | Default |
-|---|---|
-| `GROQ_PRIMARY_MODEL` | `llama-3.3-70b-versatile` |
-| `GROQ_FAST_MODEL` | `llama-3.1-8b-instant` |
-| `GEMINI_CHAT_MODEL` | `gemini-2.5-flash` |
+**Every model name in this project comes from `.env`. None is hardcoded anywhere in the source —
+not as a constant, not as a default, not as a fallback.** Providers rename and decommission
+checkpoints on their own schedule; a literal baked into the code turns that into a 404 at request
+time instead of one line to edit. `.env.example` carries working values to copy.
+
+The trade-off is that a blank variable genuinely disables that tier rather than silently
+substituting something. `python -m scripts.doctor` prints the resolved names and flags the blanks
+before you spend a single call, and `/health` reports them under `config.models`.
+
+| Variable | Used by | Blank means |
+|---|---|---|
+| `GROQ_PRIMARY_MODEL` | responder, advisor (`tier="quality"`) | quality tier dropped from the ladder |
+| `GROQ_FAST_MODEL` | planner, grader, clarifier, translator (`tier="fast"`) | fast tier dropped from the ladder |
+| `GROQ_TRANSLATE_MODEL` | the dedicated translate target | falls back to `GROQ_FAST_MODEL` |
+| `GEMINI_CHAT_MODEL` | last-resort chat fallback | no cross-provider fallback |
+| `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_CANDIDATES` | ingestion + query vectors | Gemini embedding tier skipped |
+| `LOCAL_EMBEDDING_MODEL` | offline embedding fallback | offline fallback unavailable |
+| `RERANKER_MODEL` | FlashRank cross-encoder | FlashRank's own default checkpoint (the library owns that name) |
+| `JUDGE_MODEL` | RAGAS judge | falls back to `GROQ_FAST_MODEL` |
+| `EVAL_EMBEDDING_MODEL` | RAGAS embedding metrics | `python -m evals.metrics` refuses to run |
 
 Groq deprecates models periodically. If you see `model_not_found` or `decommissioned`, check
-https://console.groq.com/docs/models and update these — the router treats such errors as fatal for
+https://console.groq.com/docs/models and update `.env` — the router treats such errors as fatal for
 that target and moves straight to the next one, so the system keeps working while you fix it.
 
 ---

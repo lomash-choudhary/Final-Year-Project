@@ -62,6 +62,55 @@ def check_config() -> int:
     return failures
 
 
+def check_models() -> int:
+    """
+    Model names are sourced from .env only — never defaulted in code. A blank one
+    silently disables a tier (a dropped rung of the fallback ladder, a skipped
+    embedding backend), so it is worth seeing the resolved list before a run.
+    """
+    print("\nModels  (all names come from .env — none are hardcoded)")
+    failures = 0
+
+    def model_line(label: str, value: str, *, required: bool, note: str = "") -> None:
+        nonlocal failures
+        if value:
+            line(OK, label, value)
+        else:
+            line(FAIL if required else WARN, label, "not set in .env" + (f" — {note}" if note else ""))
+            failures += 1 if required else 0
+
+    groq_configured = bool(settings.GROQ_API_KEY or settings.GROQ_FALLBACK_API_KEY)
+    model_line("GROQ_PRIMARY_MODEL", settings.GROQ_PRIMARY_MODEL, required=groq_configured,
+               note="quality tier has no model")
+    model_line("GROQ_FAST_MODEL", settings.GROQ_FAST_MODEL, required=groq_configured,
+               note="fast tier has no model")
+    line(
+        OK if settings.translate_model else WARN,
+        "GROQ_TRANSLATE_MODEL",
+        settings.GROQ_TRANSLATE_MODEL or f"blank — falls back to GROQ_FAST_MODEL ({settings.GROQ_FAST_MODEL or 'also unset'})",
+    )
+    model_line("GEMINI_CHAT_MODEL", settings.GEMINI_CHAT_MODEL, required=False,
+               note="no last-resort Gemini chat fallback")
+
+    candidates = settings.gemini_embedding_candidates
+    needs_gemini_embed = settings.EMBEDDING_PROVIDER in ("auto", "gemini")
+    if candidates:
+        pinned = " (pinned)" if settings.GEMINI_EMBEDDING_MODEL else " (probed in order)"
+        line(OK, "gemini embedding", ", ".join(candidates) + pinned)
+    else:
+        line(FAIL if needs_gemini_embed else WARN, "gemini embedding",
+             "set GEMINI_EMBEDDING_MODEL or GEMINI_EMBEDDING_CANDIDATES")
+        failures += 1 if needs_gemini_embed else 0
+
+    model_line(
+        "LOCAL_EMBEDDING_MODEL", settings.LOCAL_EMBEDDING_MODEL,
+        required=settings.EMBEDDING_PROVIDER in ("auto", "local"),
+        note="offline embedding fallback unavailable",
+    )
+    line(OK, "RERANKER_MODEL", settings.RERANKER_MODEL or "blank — FlashRank's own default")
+    return failures
+
+
 def check_qdrant() -> int:
     print("\nQdrant")
     try:
@@ -181,7 +230,7 @@ def main() -> int:
     print("  Bovine Disease RAG — preflight check")
     print("=" * 74)
 
-    failures = check_config() + check_qdrant() + check_corpus() + check_parsers()
+    failures = check_config() + check_models() + check_qdrant() + check_corpus() + check_parsers()
     if args.live:
         failures += check_live()
 

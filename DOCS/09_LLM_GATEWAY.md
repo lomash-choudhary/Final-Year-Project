@@ -35,8 +35,8 @@ GATEWAY_CONFIG = {
     "cache":    {"mode": "simple"},
     "retry":    {"attempts": 2, "on_status_codes": [429, 503]},
     "targets": [
-        {"override_params": {"model": "@rag/llama-3.3-70b-versatile"}},
-        {"override_params": {"model": "@brag/llama-3.1-8b-instant"}},
+        {"override_params": {"model": "@rag/<primary-model>"}},
+        {"override_params": {"model": "@brag/<fast-model>"}},
     ],
 }
 ```

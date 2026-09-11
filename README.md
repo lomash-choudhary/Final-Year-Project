@@ -55,10 +55,10 @@ graph TB
     end
 
     subgraph GATEWAY ["LLM Gateway (in-process)"]
-        R1["Groq primary · 70B"]
-        R2["Groq fallback key · 70B"]
-        R3["Groq · 8B"]
-        R4["Gemini Flash"]
+        R1["Groq primary key<br/>GROQ_PRIMARY_MODEL"]
+        R2["Groq fallback key<br/>GROQ_PRIMARY_MODEL"]
+        R3["Groq · GROQ_FAST_MODEL"]
+        R4["Gemini · GEMINI_CHAT_MODEL"]
     end
 
     subgraph INGEST ["Ingestion"]
@@ -125,7 +125,8 @@ separate, and each is protected differently:
 
 ```
 EMBEDDINGS   Gemini (free quota)  →  local sentence-transformers (offline, unlimited)
-REASONING    Groq key 1 · 70B  →  Groq key 2 · 70B  →  Groq · 8B  →  Gemini Flash
+REASONING    Groq key 1 · primary model  →  Groq key 2 · primary model
+          →  Groq key 1 · fast model     →  Groq key 2 · fast model  →  Gemini chat
 ```
 
 Your `GROQ_FALLBACK_API_KEY` is a genuine second free quota on the reasoning side. On the
@@ -176,6 +177,13 @@ Then edit `.env`. The minimum needed to run:
 | `LOGFIRE_TOKEN` | https://logfire.pydantic.dev | no — falls back to console tracing |
 | `LANGSMITH_API_KEY` | https://smith.langchain.com | no |
 | `JUDGE_GROQ` | a third Groq key, used only by the eval judge | no |
+
+> **Model names also live in `.env`, and only there.** `.env.example` ships working values for
+> `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_CANDIDATES`,
+> `LOCAL_EMBEDDING_MODEL` and the eval models — copy them across. Nothing is hardcoded in the
+> source, so when a provider decommissions a checkpoint the fix is one line here rather than a code
+> change. A blank model variable disables that tier; `python -m scripts.doctor` prints the resolved
+> set and flags the blanks before you spend an API call.
 
 > `PORTKEY_API_KEY` is **not needed**. This project ships its own gateway with the same
 > fallback/retry/cache behaviour — see [DOCS/09_LLM_GATEWAY.md](DOCS/09_LLM_GATEWAY.md) for what
@@ -390,6 +398,7 @@ that must *not* be blocked.
 | `/health` shows 0 points | Ingestion has not run: `python -m app.ingestion.processor --wipe` |
 | `DimensionMismatch` | The embedding model changed. Re-ingest with `--wipe` |
 | `All LLM targets exhausted` | Every Groq key is rate-limited. Wait for the window, or add `GROQ_FALLBACK_API_KEY` |
+| `No usable LLM target` / `model_not_found` / `decommissioned` | A model name in `.env` is blank or retired. Check https://console.groq.com/docs/models, update `GROQ_PRIMARY_MODEL` / `GROQ_FAST_MODEL` / `GEMINI_CHAT_MODEL`, restart. Run `python -m scripts.doctor` to see what resolved |
 | Ingestion stops on a 429 | Re-run the same command — the manifest resumes. Lower `EMBED_MAX_RPM` (counted in **texts**/min, free ceiling is 100) |
 | `The write operation timed out` | Qdrant Cloud is throttling. Lower `QDRANT_UPSERT_BATCH` (default 24) or raise `QDRANT_TIMEOUT` |
 | UI says "Backend unreachable. Tried " with a blank URL | `BACKEND_URL` is set but empty in `.env`. Remove the line or set `http://localhost:8000` |

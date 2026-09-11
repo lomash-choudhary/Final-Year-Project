@@ -42,11 +42,19 @@ def _get_ranker():
             return _ranker
         try:
             from flashrank import Ranker
-            logfire.info("Loading FlashRank cross-encoder (first run downloads the ONNX model)")
+            # The checkpoint name comes from RERANKER_MODEL when set; blank hands
+            # the choice to FlashRank itself rather than pinning a name here that
+            # a library upgrade could invalidate.
+            name = settings.RERANKER_MODEL
+            kwargs = {"model_name": name} if name else {}
+            logfire.info(
+                "Loading FlashRank cross-encoder (first run downloads the ONNX model)",
+                model=name or "flashrank-default",
+            )
             try:
-                _ranker = Ranker(cache_dir="/tmp/flashrank")
+                _ranker = Ranker(cache_dir="/tmp/flashrank", **kwargs)
             except Exception:
-                _ranker = Ranker()  # default cache dir
+                _ranker = Ranker(**kwargs)  # default cache dir
             logfire.info("FlashRank ready")
         except Exception as exc:
             _unavailable = True
