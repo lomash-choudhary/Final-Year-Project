@@ -193,7 +193,7 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
     model cannot cite. `SHOW_CITATIONS_IN_ADVICE=true` puts them back.
 19. **No model name is hardcoded anywhere — not even as a fallback.** Every model identifier comes
     from `.env` via `settings` (`GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GROQ_TRANSLATE_MODEL`,
-    `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_CANDIDATES`,
+    `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`,
     `LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL`). No
     `_str("...", "some-model")` default, no literal in an `except` branch, no constant in a node
     or eval module. A blank name disables that tier **loudly**: the router drops the target and
@@ -265,7 +265,7 @@ Everything lives in `.env` (see `.env.example`, documented in `DOCS/05_ENVIRONME
 |---|---|
 | Required | `GEMINI_API_KEY` (embeddings), `GROQ_API_KEY` (reasoning), `QDRANT_CLUSTER_ENDPOINT` |
 | Strongly recommended | `GROQ_FALLBACK_API_KEY` (a real second free quota) |
-| Required (models) | `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_EMBEDDING_MODEL` *or* `GEMINI_EMBEDDING_CANDIDATES` — nothing is defaulted in code |
+| Required (models) | `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_EMBEDDING_MODEL` — nothing is defaulted in code |
 | Optional | `GROQ_TRANSLATE_API_KEY`, `GROQ_CLARIFIER_API_KEY`, `GROQ_ADVISOR_API_KEY`, `QDRANT_API_KEY` (cloud only), `LOGFIRE_TOKEN`, `LANGSMITH_API_KEY`, `JUDGE_GROQ` |
 | Optional (models) | `GROQ_TRANSLATE_MODEL`, `GEMINI_CHAT_MODEL`, `LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL` |
 | Inert | `PORTKEY_API_KEY`, `ENABLE_PORTKEY` |

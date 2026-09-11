@@ -38,8 +38,7 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | Variable | Default | Notes |
 |---|---|---|
 | `EMBEDDING_PROVIDER` | `auto` | `auto` tries Gemini then falls back to a local model. `gemini` fails loudly instead. `local` never touches an API |
-| `GEMINI_EMBEDDING_MODEL` | *(blank)* | Pins one embedding model. Blank means probe `GEMINI_EMBEDDING_CANDIDATES` in order and use the first your key can reach — model availability differs per account, which is why this is probed rather than assumed |
-| `GEMINI_EMBEDDING_CANDIDATES` | *(from `.env`)* | Comma-separated, ordered probe list. Only consulted when `GEMINI_EMBEDDING_MODEL` is blank. Both blank = the Gemini embedding tier is skipped entirely |
+| `GEMINI_EMBEDDING_MODEL` | *(from `.env`)* | The one embedding model, used for both ingestion and query vectors. No fallback list: the Gemini embedding family mixes widths (3072 for `gemini-embedding-001`, 768 for `text-embedding-004`/`embedding-001`), so a substitute is a different vector space, not a degraded one. Must match the model the collection was built with; changing it means re-ingesting with `--wipe`. Blank skips the Gemini embedding tier |
 | `LOCAL_EMBEDDING_MODEL` | *(from `.env`)* | Offline `sentence-transformers` fallback. Downloads its weights on first use, then runs offline forever. Required unless `EMBEDDING_PROVIDER = gemini` |
 | `EMBED_BATCH_SIZE` | `16` | Texts per Gemini request. Auto-halves on a batch-size rejection |
 | `EMBED_MAX_RPM` | `90` | **Texts per minute, not requests per minute.** Gemini charges `embed_content_free_tier_requests` per *text*: a batch of 16 costs 16 units, not 1. The free ceiling is 100. Keep this below it |
@@ -105,7 +104,7 @@ before you spend a single call, and `/health` reports them under `config.models`
 | `GROQ_FAST_MODEL` | planner, grader, clarifier, translator (`tier="fast"`) | fast tier dropped from the ladder |
 | `GROQ_TRANSLATE_MODEL` | the dedicated translate target | falls back to `GROQ_FAST_MODEL` |
 | `GEMINI_CHAT_MODEL` | last-resort chat fallback | no cross-provider fallback |
-| `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_CANDIDATES` | ingestion + query vectors | Gemini embedding tier skipped |
+| `GEMINI_EMBEDDING_MODEL` | ingestion + query vectors | Gemini embedding tier skipped |
 | `LOCAL_EMBEDDING_MODEL` | offline embedding fallback | offline fallback unavailable |
 | `RERANKER_MODEL` | FlashRank cross-encoder | FlashRank's own default checkpoint (the library owns that name) |
 | `JUDGE_MODEL` | RAGAS judge | falls back to `GROQ_FAST_MODEL` |

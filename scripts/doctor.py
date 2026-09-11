@@ -92,15 +92,12 @@ def check_models() -> int:
     model_line("GEMINI_CHAT_MODEL", settings.GEMINI_CHAT_MODEL, required=False,
                note="no last-resort Gemini chat fallback")
 
-    candidates = settings.gemini_embedding_candidates
     needs_gemini_embed = settings.EMBEDDING_PROVIDER in ("auto", "gemini")
-    if candidates:
-        pinned = " (pinned)" if settings.GEMINI_EMBEDDING_MODEL else " (probed in order)"
-        line(OK, "gemini embedding", ", ".join(candidates) + pinned)
-    else:
-        line(FAIL if needs_gemini_embed else WARN, "gemini embedding",
-             "set GEMINI_EMBEDDING_MODEL or GEMINI_EMBEDDING_CANDIDATES")
-        failures += 1 if needs_gemini_embed else 0
+    model_line(
+        "GEMINI_EMBEDDING_MODEL", settings.gemini_embedding_model,
+        required=needs_gemini_embed,
+        note="Gemini embedding tier has no model",
+    )
 
     model_line(
         "LOCAL_EMBEDDING_MODEL", settings.LOCAL_EMBEDDING_MODEL,

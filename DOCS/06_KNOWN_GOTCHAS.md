@@ -20,11 +20,18 @@ Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning s
 
 ---
 
-## 2. Vector dimension is probed, and the backend locks after init
+## 2. One embedding model, dimension probed, backend locked after init
 
-Dimension is measured by embedding one short string and reading `len()`. It is never hardcoded,
-because model availability differs per Google account and dimensions change between model
-versions. A hardcoded 3072 is how a collection ends up silently rejecting every upsert.
+`GEMINI_EMBEDDING_MODEL` is a single pinned name with **no fallback list**. That is deliberate:
+the Gemini embedding family mixes widths across generations — 3072 for `gemini-embedding-001`,
+768 for `text-embedding-004` and `embedding-001` — so "try the next model" is not graceful
+degradation, it is a second vector space written into the same collection. If the configured
+model is unreachable, the Gemini tier is disabled and the decision passes to `_init_backend()`,
+which either switches to the local model (logged, dimension-checked) or raises.
+
+The *dimension* is still measured rather than hardcoded — embed one short string, read `len()` —
+because a model can change its output width between versions, and a hardcoded 3072 is how a
+collection ends up silently rejecting every upsert.
 
 The backend is then **locked for the process**. If Gemini dies mid-run the code raises rather than
 quietly switching to a 768-dim local model — half a collection at 3072 and half at 768 is not a
@@ -237,7 +244,7 @@ which is why changing `GEMINI_EMBEDDING_MODEL` in `.env` invalidates the cache a
 
 Not as a constant, not as a `_str(..., "default")`, not as a fallback in an `except` branch. Every
 model identifier in the system — `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GROQ_TRANSLATE_MODEL`,
-`GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_CANDIDATES`,
+`GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`,
 `LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL` — is read from
 `.env` through `settings`.
 

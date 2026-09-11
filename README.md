@@ -179,7 +179,7 @@ Then edit `.env`. The minimum needed to run:
 | `JUDGE_GROQ` | a third Groq key, used only by the eval judge | no |
 
 > **Model names also live in `.env`, and only there.** `.env.example` ships working values for
-> `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_CANDIDATES`,
+> `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`,
 > `LOCAL_EMBEDDING_MODEL` and the eval models — copy them across. Nothing is hardcoded in the
 > source, so when a provider decommissions a checkpoint the fix is one line here rather than a code
 > change. A blank model variable disables that tier; `python -m scripts.doctor` prints the resolved

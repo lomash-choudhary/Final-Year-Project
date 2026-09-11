@@ -61,12 +61,6 @@ def _bool(name: str, default: bool) -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
-def _csv(name: str) -> tuple[str, ...]:
-    # Comma-separated list, used for the ordered embedding-model probe list.
-    # Blank entries are dropped so a trailing comma in .env is harmless.
-    return tuple(item.strip() for item in _str(name).split(",") if item.strip())
-
-
 @dataclass(frozen=True)
 class Settings:
     # ── identity ──────────────────────────────────────────────────────────────
@@ -83,14 +77,6 @@ class Settings:
     GEMINI_API_KEY: str = field(default_factory=lambda: _str("GEMINI_API_KEY"))
     GEMINI_EMBEDDING_MODEL: str = field(default_factory=lambda: _str("GEMINI_EMBEDDING_MODEL"))
     GEMINI_CHAT_MODEL: str = field(default_factory=lambda: _str("GEMINI_CHAT_MODEL"))
-
-    # Probed in order when GEMINI_EMBEDDING_MODEL is blank. The first model the
-    # key can actually reach wins — different Google accounts have different
-    # model availability, and pinning one is the #1 cause of a dead ingest.
-    # Comma-separated in .env; blank means "only GEMINI_EMBEDDING_MODEL".
-    GEMINI_EMBEDDING_CANDIDATES: tuple[str, ...] = field(
-        default_factory=lambda: _csv("GEMINI_EMBEDDING_CANDIDATES")
-    )
 
     # ── Groq (reasoning) ──────────────────────────────────────────────────────
     GROQ_API_KEY: str = field(default_factory=lambda: _str("GROQ_API_KEY"))
@@ -220,18 +206,19 @@ class Settings:
         return self.GROQ_TRANSLATE_MODEL or self.GROQ_FAST_MODEL
 
     @property
-    def gemini_embedding_candidates(self) -> list[str]:
+    def gemini_embedding_model(self) -> str:
         """
-        Ordered probe list for Gemini embeddings.
+        The one Gemini embedding model this project uses.
 
-        An explicit GEMINI_EMBEDDING_MODEL pins one model and skips the probe.
-        Otherwise the candidates from .env are tried in order. Empty means the
-        Gemini tier has no model to try at all, and embedding.py says so rather
-        than inventing one.
+        Deliberately a single pinned name, not a probe list. The collection is
+        built at one fixed dimension (3072 for models/gemini-embedding-001), and
+        the Gemini embedding family mixes dimensions across generations — 768 for
+        text-embedding-004 and embedding-001. Silently falling through to a
+        different model would rebuild the index in the wrong vector space on the
+        next `--wipe`, with nothing but a log line to show for it. Blank means the
+        Gemini tier is unconfigured, and embedding.py says so rather than guessing.
         """
-        if self.GEMINI_EMBEDDING_MODEL:
-            return [self.GEMINI_EMBEDDING_MODEL]
-        return list(self.GEMINI_EMBEDDING_CANDIDATES)
+        return self.GEMINI_EMBEDDING_MODEL
 
     @property
     def qdrant_is_local(self) -> bool:
@@ -287,10 +274,11 @@ class Settings:
         if scope == "ingestion":
             # Model names are never defaulted in code, so a blank one is a real
             # configuration error — catch it here instead of inside the SDK.
-            if self.EMBEDDING_PROVIDER in ("auto", "gemini") and not self.gemini_embedding_candidates:
+            if self.EMBEDDING_PROVIDER in ("auto", "gemini") and not self.gemini_embedding_model:
                 problems.append(
-                    "No Gemini embedding model configured — set GEMINI_EMBEDDING_MODEL, or "
-                    "GEMINI_EMBEDDING_CANDIDATES to a comma-separated probe list (see .env.example)."
+                    "GEMINI_EMBEDDING_MODEL is empty — the Gemini embedding tier has no model to "
+                    "call (see .env.example). It must match the model the collection was built "
+                    "with, or retrieval reads a different vector space than ingestion wrote."
                 )
             if self.EMBEDDING_PROVIDER in ("auto", "local") and not self.LOCAL_EMBEDDING_MODEL:
                 problems.append(
@@ -362,7 +350,6 @@ class Settings:
                 "groq_translate": self.translate_model or None,
                 "gemini_chat": self.GEMINI_CHAT_MODEL or None,
                 "gemini_embedding": self.GEMINI_EMBEDDING_MODEL or None,
-                "gemini_embedding_candidates": list(self.GEMINI_EMBEDDING_CANDIDATES),
                 "local_embedding": self.LOCAL_EMBEDDING_MODEL or None,
                 "reranker": self.RERANKER_MODEL or "flashrank-default",
             },

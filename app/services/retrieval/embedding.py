@@ -11,10 +11,16 @@ Groq primary/fallback key pair protects the *reasoning* side of the system
 
 Dimension safety
 ----------------
-The vector dimension is *probed*, never hardcoded: we embed one short string and
-measure the result. Different Google accounts get different models, and models
-change dimension between versions — a hardcoded 3072 is how a collection ends up
-silently rejecting every upsert.
+The embedding model is a single pinned name from .env (GEMINI_EMBEDDING_MODEL) —
+there is no probe list. The Gemini embedding family mixes dimensions across
+generations (3072 for gemini-embedding-001, 768 for text-embedding-004 and
+embedding-001), so a fallback chain here does not degrade gracefully: it writes a
+second vector space into the same collection. One model, or the tier is off.
+
+The *dimension* is still measured rather than hardcoded — we embed one short
+string and take len() of the result — because a model can change its output width
+between versions, and a hardcoded 3072 is how a collection ends up silently
+rejecting every upsert.
 
 Because Qdrant fixes the dimension at collection creation, the backend is chosen
 once per process and then locked. If Gemini dies mid-run we raise instead of
@@ -180,7 +186,7 @@ _cache = EmbeddingCache(settings.resolve_path(settings.EMBEDDING_CACHE_PATH), se
 # ── Gemini backend ─────────────────────────────────────────────────────────────
 
 def _build_gemini() -> EmbeddingBackend | None:
-    """Probe Gemini embedding models in order; return the first that responds."""
+    """Build the Gemini backend from the one configured model, or return None."""
     if not settings.GEMINI_API_KEY:
         logfire.info("No GEMINI_API_KEY — skipping Gemini embedding tier")
         return None
@@ -191,67 +197,68 @@ def _build_gemini() -> EmbeddingBackend | None:
         logfire.warning("langchain-google-genai not installed ({err})", err=str(exc))
         return None
 
-    # Names come from .env only — an explicit GEMINI_EMBEDDING_MODEL pins one,
-    # otherwise GEMINI_EMBEDDING_CANDIDATES is probed in order. Nothing is
-    # guessed: an empty list means this tier is unconfigured, not "use the usual one".
-    candidates = settings.gemini_embedding_candidates
-    if not candidates:
+    # One name, straight from .env. There is no candidate list to fall through
+    # to: the alternatives embed at a different width, so "try the next one" would
+    # mean writing 768-dim vectors into a 3072-dim collection. Blank means this
+    # tier is unconfigured, not "use the usual one".
+    model_name = settings.gemini_embedding_model
+    if not model_name:
         logfire.warning(
-            "No Gemini embedding model configured — set GEMINI_EMBEDDING_MODEL or "
-            "GEMINI_EMBEDDING_CANDIDATES in .env. Skipping the Gemini embedding tier."
+            "GEMINI_EMBEDDING_MODEL is empty — set it in .env (see .env.example). "
+            "Skipping the Gemini embedding tier."
         )
         return None
 
-    for model_name in candidates:
+    try:
+        # task_type is a real quality lever: asymmetric embeddings score
+        # documents and queries in different spaces. Older versions of the
+        # package do not accept the kwarg, hence the TypeError branch.
         try:
-            # task_type is a real quality lever: asymmetric embeddings score
-            # documents and queries in different spaces. Older versions of the
-            # package do not accept the kwarg, hence the TypeError branch.
-            try:
-                doc_model = GoogleGenerativeAIEmbeddings(
-                    model=model_name,
-                    google_api_key=settings.GEMINI_API_KEY,
-                    task_type="retrieval_document",
-                )
-                query_model = GoogleGenerativeAIEmbeddings(
-                    model=model_name,
-                    google_api_key=settings.GEMINI_API_KEY,
-                    task_type="retrieval_query",
-                )
-                asymmetric = True
-            except TypeError:
-                doc_model = query_model = GoogleGenerativeAIEmbeddings(
-                    model=model_name,
-                    google_api_key=settings.GEMINI_API_KEY,
-                )
-                asymmetric = False
-
-            _limiter.acquire()
-            probe = query_model.embed_query("bovine theileriosis prevalence")
-            dim = len(probe)
-            if dim == 0:
-                raise EmbeddingError("probe returned an empty vector")
-
-            logfire.info(
-                "Gemini embeddings ready",
-                model=model_name, dim=dim, asymmetric_task_types=asymmetric,
-            )
-            return EmbeddingBackend(
-                name="gemini",
+            doc_model = GoogleGenerativeAIEmbeddings(
                 model=model_name,
-                dim=dim,
-                embed_documents=doc_model.embed_documents,
-                embed_single=query_model.embed_query,
+                google_api_key=settings.GEMINI_API_KEY,
+                task_type="retrieval_document",
             )
-
-        except Exception as exc:
-            logfire.warning(
-                "Gemini model '{model}' unavailable ({err}) — trying next candidate",
-                model=model_name, err=str(exc)[:300],
+            query_model = GoogleGenerativeAIEmbeddings(
+                model=model_name,
+                google_api_key=settings.GEMINI_API_KEY,
+                task_type="retrieval_query",
             )
+            asymmetric = True
+        except TypeError:
+            doc_model = query_model = GoogleGenerativeAIEmbeddings(
+                model=model_name,
+                google_api_key=settings.GEMINI_API_KEY,
+            )
+            asymmetric = False
 
-    logfire.warning("No Gemini embedding model responded to the probe")
-    return None
+        _limiter.acquire()
+        probe = query_model.embed_query("bovine theileriosis prevalence")
+        dim = len(probe)
+        if dim == 0:
+            raise EmbeddingError("probe returned an empty vector")
+
+        logfire.info(
+            "Gemini embeddings ready",
+            model=model_name, dim=dim, asymmetric_task_types=asymmetric,
+        )
+        return EmbeddingBackend(
+            name="gemini",
+            model=model_name,
+            dim=dim,
+            embed_documents=doc_model.embed_documents,
+            embed_single=query_model.embed_query,
+        )
+
+    except Exception as exc:
+        # Do not substitute another Gemini model here. Returning None hands the
+        # decision to _init_backend(), which either falls back to the local model
+        # (a deliberate, logged, dimension-checked switch) or raises.
+        logfire.warning(
+            "Gemini embedding model '{model}' unavailable ({err}) — Gemini tier disabled",
+            model=model_name, err=str(exc)[:300],
+        )
+        return None
 
 
 # ── local backend ──────────────────────────────────────────────────────────────

@@ -232,7 +232,8 @@ graph TB
 
 | Decision | Rationale |
 |---|---|
-| Vector dimension is **probed**, never hardcoded | Model availability differs per Google account and dimensions change between versions. A hardcoded 3072 is how a collection silently rejects every upsert. |
+| **One** embedding model, pinned in `.env` | The Gemini embedding family mixes widths (3072 vs 768). A fallback list would silently write a second vector space into the collection on the next `--wipe`. |
+| Vector dimension is **probed**, never hardcoded | A model can change its output width between versions. A hardcoded 3072 is how a collection silently rejects every upsert. |
 | Embedding backend is **locked after init** | Qdrant fixes the dimension at collection creation. Switching from 3072-dim Gemini to 768-dim local mid-run would corrupt the index, so a mid-run failure raises instead. |
 | Deterministic point IDs + delete-before-upsert | Re-ingesting an edited document leaves no orphaned chunks from its longer previous version. |
 | PDF fallbacks apply **per page** | A 124-page journal issue with four bad pages costs three page-opens, not a full re-parse — and recovered pages land back in position, so page citations stay correct. |
