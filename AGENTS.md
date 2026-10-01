@@ -1,7 +1,14 @@
 # AGENTS.md
 
 Working guide for AI coding agents (and humans) on this repository.
-`CLAUDE.md` points here; this file is the single source of truth.
+`CLAUDE.md` contains only `@AGENTS.md` — never add content there; this file is the single source of truth for *how to work*.
+`MEMORY.md` holds *project state* — read it at the start of every session and update it at the
+end (see §12).
+
+There is exactly **one** `AGENTS.md`, **one** `CLAUDE.md` and **one** `MEMORY.md`, all at the repo
+root. Do not create per-directory copies or tool-specific variants (`.cursorrules`, `GEMINI.md`,
+…); point them here instead. (`.kilo/worktrees/*` are tool-managed git worktrees — their copies are
+checkouts of these same files, not separate sources.)
 
 ---
 
@@ -335,3 +342,22 @@ and it costs nothing.
 **Keep docs in sync.** This project's documentation is part of the deliverable (final-year
 project). A behaviour change that contradicts `README.md`, `ARCHITECTURE.md` or a `DOCS/` file
 should update that file in the same change.
+
+---
+
+## 12. Session protocol — update MEMORY.md every time
+
+**Every working session ends with an update to `MEMORY.md`**, even if the session changed no
+code. This is a standing instruction from the project owner, not a suggestion.
+
+1. **Start**: read `MEMORY.md` before touching anything. Treat its "Current state" as a claim to
+   verify (`git log`, `GET /health`, `scripts/doctor`), not as fact.
+2. **End**: before your final reply, edit `MEMORY.md`:
+   - bump `Last reviewed:` to today's date (absolute, `YYYY-MM-DD`);
+   - correct "Current state" if anything changed (commits, corpus, index, deployment, models);
+   - add new settled decisions, non-obvious facts and open threads; delete ones that are resolved
+     or turned out wrong;
+   - append one dated line to the **Session log** at the bottom: what was done and what is left.
+3. **Scope**: `MEMORY.md` records what is *not* derivable from the code or git history — state,
+   decisions, reasons, open threads. Rules for *how to work* belong in this file instead; do not
+   duplicate them there.

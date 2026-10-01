@@ -3,7 +3,9 @@
 Durable project context that is **not** derivable from the code: current state, settled decisions,
 and open threads. Working instructions live in [AGENTS.md](AGENTS.md).
 
-Last reviewed: 2026-09-11.
+Last reviewed: 2026-10-01.
+
+**Every session must update this file before it ends** — protocol in AGENTS.md §12.
 
 ---
 
@@ -22,10 +24,12 @@ Last reviewed: 2026-09-11.
 
 ---
 
-## Current state (verified 2026-09-11)
+## Current state (verified 2026-10-01)
 
-- Branch `main`, clean tree. History: `init` → ingestion runs → deployment-ready → monitoring fixes
-  → translation/clarification nodes (`ce1d768`, the most recent work).
+- Branch `main`, clean tree, HEAD `250125f`. History: `init` → ingestion runs → deployment-ready →
+  monitoring fixes → translation/clarification nodes (`ce1d768`) → two "code refactor, model
+  update" commits on 2026-09-12 (`9133c21`, `250125f`) that removed every hardcoded model name
+  (AGENTS.md invariant 19) and added `AGENTS.md` / `CLAUDE.md` / `MEMORY.md`.
 - **Corpus ingested**: 16 PDFs in `DATA/` → 15 indexed `ok`, 1 detected as a content-level
   duplicate. **805 chunks / 805 points** in Qdrant, `recursive` chunk strategy,
   `models/gemini-embedding-001` at **3072 dimensions**. Manifest timestamps are 2026-08-08.
@@ -93,3 +97,16 @@ Last reviewed: 2026-09-11.
   zero-cost metrics are instant.
 - **No automated tests and no CI.** Worth adding if the project continues past submission —
   guardrail regexes and the `_parse` helpers are the highest-value targets.
+
+---
+
+## Session log
+
+One dated line per session, newest last: what was done, what is left.
+
+- 2026-09-12 — Model names moved entirely to `.env` (invariant 19); agent docs created.
+- 2026-10-01 — Confirmed single root `AGENTS.md` / `CLAUDE.md` → AGENTS.md / `MEMORY.md`; added the
+  end-of-session MEMORY.md protocol (AGENTS.md §12) and this log. No code changes. Corpus/index
+  facts above not re-verified this session (Qdrant not queried).
+- 2026-10-01 — `CLAUDE.md` reduced to the single line `@AGENTS.md`; all guidance lives in
+  `AGENTS.md` only (owner's preference — never add content to `CLAUDE.md`).
