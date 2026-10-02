@@ -6,14 +6,18 @@ literature is uncertain. That is exactly wrong for someone standing in a shed at
 6am with a sick animal. They need one thing: **can I handle this myself, or do I
 call the vet?**
 
-So this node produces a fixed, scannable shape:
+So this node produces a fixed, short, scannable shape:
 
-    What it looks like        one or two plain sentences
-    What to do now            numbered steps, or the reason to call a vet
-    Watch for                 signs that mean the situation got worse
+    Likely cause              one plain sentence
+    Medicine                  what the retrieved passages name for this problem, or
+                              "none found — ask a vet"; never invented
+    What to do                at most three steps
+    Call the vet if           at most two warning signs
 
 and a machine-readable `care_level` so the UI can badge urgency without parsing
-prose.
+prose. On `vet_now` the whole answer collapses to "contact a vet now" plus at
+most two things that are safe to do while waiting — a farmer facing an
+emergency needs one instruction, not a page.
 
 Safety posture
 --------------
@@ -22,12 +26,26 @@ fee. A false "treat at home" can cost the animal. The red-flag list below forces
 `vet_now` regardless of what the retrieved passages say, because a language
 model reasoning over veterinary text is not a diagnostic instrument.
 
+Medicines are named **only when the reference material names them** for the
+problem at hand — the corpus, not the model's memory, is the source. Antibiotics,
+injectables and other prescription drugs are named but never dosed. No
+prescription notes are added to the answer — the frontend carries the
+disclaimer (owner decision 2026-10-02). Strengths are given only for farm-level
+remedies (footbath, dressing, spray) and only when the passage states them.
+
+The prompt deliberately has no persona and no disclaimer: every prompt token is
+paid on every farmer turn, and a role-play line ("you are a livestock
+advisor") added nothing the format rules did not already enforce.
+
 No citation markers. `[1]`/`[2]` in an answer with no sources panel is noise —
 and sources are deliberately hidden from consumers. Set
 SHOW_CITATIONS_IN_ADVICE=true to put them back.
 """
 
 from __future__ import annotations
+
+import re
+import unicodedata
 
 import logfire
 
@@ -37,69 +55,61 @@ from app.llm import AllTargetsFailed, router
 
 VALID_CARE_LEVELS = ("home_care", "vet_soon", "vet_now", "info")
 
-_PROMPT = """You are an experienced livestock advisor helping a small farmer in India. You are \
-talking to the farmer directly.
+_PROMPT = """Answer a farmer's question about a sick cow or buffalo, using the passages below.
 
-REFERENCE MATERIAL FROM VETERINARY RESEARCH:
+PASSAGES:
 {context}
 
 CONVERSATION SO FAR:
 {history}
 
-FARMER'S PROBLEM:
+QUESTION:
 "{question}"
 
-Write a short, practical answer. Ground it in the reference material above where that material is \
-relevant; where it is not, rely on standard, widely accepted livestock husbandry practice and stay \
-conservative.
+Care level:
+- vet_now if any of: bloody diarrhoea, blood in milk or urine, high fever, off feed over 48 hours, \
+laboured breathing, cannot stand, collapse, hard bloated belly, difficult calving, placenta retained \
+over 12 hours, convulsions, suspected poisoning, fast-spreading swelling.
+- otherwise vet_soon if it needs a vet within a day or two, else home_care.
 
-Decide ONE care level:
-- home_care : mild and clearly manageable at home
-- vet_soon  : needs a vet, but within a day or two
-- vet_now   : urgent, call a vet immediately
+Medicine:
+- Only what the passages name for this problem. Name the exact substance (e.g. "copper sulfate \
+dressing", "oxytetracycline spray"), never a vague "antiseptic". Up to 3 options.
+- Generic names only, never a brand, not even in brackets: Naxcel = ceftiofur, Terramycin = \
+oxytetracycline, Tramisol = levamisole.
+- Only established treatments. Skip products a study was only testing as experimental.
+- Antibiotics, injections and udder tubes: name only, no dose, and never tell the farmer to give them \
+in "What to do". Do not add prescription notes or disclaimers.
+- Footbath, dressing, wash or spray: give the strength only if the passages state it.
+- If the question asks what to apply, list what to apply first. If the passages say the problem also \
+needs an injection to cure it, name that too.
+- If the passages name nothing for this problem, write: Ask your vet.
+- Ignore outdated remedies from old texts (arsenic, mercury, turpentine or kerosene drenches, \
+inflating the udder, bleeding).
 
-Choose vet_now whenever any of these are present, no matter what else you conclude:
-severe or bloody diarrhoea; blood in milk or urine; high fever; not eating for more than 48 hours; \
-laboured breathing; unable to stand; sudden collapse; bloated hard abdomen; difficult calving; \
-retained placenta beyond 12 hours; convulsions; suspected poisoning; a swelling that is spreading fast.
+Format. If vet_now, reply only:
+**Contact a vet now.** <one sentence why>
+**While you wait**
+- <up to 2 safe steps>
 
-FORMAT — follow exactly, no headings other than these:
+Otherwise reply only:
+**Likely cause**
+<one sentence>
+**Medicine**
+<one or two lines>
+**What to do**
+- <up to 3 steps, each under 15 words>
+**Call the vet if**
+- <up to 2 signs>
 
-**What this looks like**
-One or two plain sentences on the most likely explanation. Say plainly if it cannot be narrowed down.
-
-**What to do now**
-If home_care: numbered steps. Give practical quantities where you can (feed, water, jaggery, \
-electrolytes, warm/dry shelter, isolation from the herd).
-If vet_soon or vet_now: say clearly that a vet is needed and why, then give only what is safe to do \
-while waiting.
-
-**Watch for**
-2-3 warning signs that mean call the vet immediately.
-
-Rules:
-- Plain language. No medical jargon, no Latin names, no research citations, no passage numbers.
-- Never name a prescription medicine, antibiotic, or injectable dose. Those are a vet's decision.
-- Do not invent a diagnosis you are not confident about.
-- Keep the whole answer under 200 words.
-
-End your reply with exactly this line and nothing after it:
-CARE_LEVEL: <home_care or vet_soon or vet_now>"""
-
-_DISCLAIMER = (
-    "\n\n---\n*This is general guidance based on veterinary literature, not a diagnosis. "
-    "If your animal gets worse, contact a qualified veterinarian.*"
-)
+Plain words: "put on the wound", not "topical"; "injection", not "systemic". Never mention passages, studies, sources, appendices, tables or pages. Under 100 words.
+Last line, exactly: CARE_LEVEL: <home_care|vet_soon|vet_now>"""
 
 _FALLBACK_ANSWER = (
-    "**What this looks like**\n"
-    "I could not work out a reliable answer for this from what I have.\n\n"
-    "**What to do now**\n"
-    "Please contact your local veterinarian or the nearest veterinary hospital and describe the "
-    "signs you are seeing.\n\n"
-    "**Watch for**\n"
-    "Any animal that stops eating for more than a day, cannot stand, or is breathing with "
-    "difficulty needs a vet immediately."
+    "**Contact a vet.** I can't advise on this one safely.\n\n"
+    "**While you wait**\n"
+    "- Keep the animal in clean, dry shade with fresh water.\n"
+    "- Separate it from the rest of the herd."
 )
 
 
@@ -126,6 +136,125 @@ def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
         blocks.append(block)
         used += len(block)
     return "\n\n---\n\n".join(blocks), len(blocks)
+
+
+# Passages often say "see Appendix I" or "(Table 2)"; the model copies those into
+# advice for someone who has no access to the document. The prompt forbids it,
+# this catches the drift.
+_DOC_REFERENCE = re.compile(
+    r"\s*[(\[]\s*(?:see\s+)?(?:appendix|table|fig(?:ure)?\.?|page|p\.)\s*[\w.-]*\s*[)\]]",
+    re.IGNORECASE,
+)
+
+
+def _strip_doc_references(text: str) -> str:
+    return _DOC_REFERENCE.sub("", text)
+
+
+# ── medicine enforcement ──────────────────────────────────────────────────────
+# The prompt asks for generic names and no outdated remedies. gpt-oss-120b still wrote "levamisole (Tramisol)",
+# listed clenbuterol (banned in food animals) with no vet note, and suggested
+# phenothiazine. So the rules the farmer's safety rests on are applied here, in
+# code, after the model — the prompt is a request, this is the guarantee.
+
+# Brand names found in the (largely US) corpus → generic name.
+_BRANDS = {
+    "naxcel": "ceftiofur", "excenel": "ceftiofur", "excede": "ceftiofur",
+    "terramycin": "oxytetracycline", "liquamycin": "oxytetracycline",
+    "tramisol": "levamisole", "levasole": "levamisole", "albon": "sulfadimethoxine",
+    "lincomix": "lincomycin", "lincospectin": "lincomycin-spectinomycin",
+    "ls-50": "lincomycin-spectinomycin", "micotil": "tilmicosin", "nuflor": "florfenicol",
+    "baytril": "enrofloxacin", "draxxin": "tulathromycin", "banamine": "flunixin",
+    "butalex": "buparvaquone", "berenil": "diminazene", "ivomec": "ivermectin",
+    "panacur": "fenbendazole", "safe-guard": "fenbendazole", "hoof pro plus": "copper sulfate spray",
+}
+_BRAND_ALT = "|".join(re.escape(b) for b in sorted(_BRANDS, key=len, reverse=True))
+_BRAND_IN_BRACKETS = re.compile(rf"\s*\(\s*(?:{_BRAND_ALT})\b[^)]*\)", re.IGNORECASE)
+_BRAND_WORD = re.compile(rf"\b(?:{_BRAND_ALT})\b", re.IGNORECASE)
+
+# Banned in food-producing animals, obsolete, or only experimental in the corpus.
+_DISALLOWED = re.compile(
+    r"clenbuterol|chloramphenicol|nitrofur\w*|furazolidone|diethylstilb\w*|phenothiazine|"
+    r"arsenic\w*|mercur\w*|strychnine|turpentine|kerosene|propolis|stem cell",
+    re.IGNORECASE,
+)
+
+# The model's own "(vet must prescribe)" style notes are removed: the frontend
+# carries the disclaimer.
+_VET_TAG = re.compile(r"\s*[(\[]\s*vet[^)\]]*[)\]]|\s*[-–,]\s*vet must prescribe", re.IGNORECASE)
+_JARGON = (
+    (re.compile(r"\(\W*topical[^)]*\)", re.IGNORECASE), "(put on the wound)"),
+    (re.compile(r"\bsystemic\W+(?=injection)", re.IGNORECASE), ""),
+    (re.compile(r"\(\W*systemic\W*\)", re.IGNORECASE), "(injection)"),
+)
+
+
+# gpt-oss emits non-breaking hyphens (U+2011), narrow spaces and zero-width
+# characters. They render identically but defeat every regex below, so the
+# answer is folded to plain characters first.
+_INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
+_DASHES = re.compile("[\u2010-\u2014\u2212]")
+_SPACES = re.compile("[\u00a0\u2007\u202f]")
+
+
+def _normalise(text: str) -> str:
+    return _SPACES.sub(" ", _DASHES.sub("-", _INVISIBLE.sub("", unicodedata.normalize("NFKC", text))))
+
+
+def _clean_brands(text: str) -> str:
+    text = _BRAND_IN_BRACKETS.sub("", text)
+    return _BRAND_WORD.sub(lambda m: _BRANDS[m.group(0).lower()], text)
+
+
+def _plain(text: str) -> str:
+    for pattern, replacement in _JARGON:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _medicine_items(section: list[str]) -> list[str]:
+    """Filter one Medicine section: drop disallowed drugs and the model's vet notes."""
+    out: list[str] = []
+    for line in section:
+        bullet = re.match(r"^\s*(?:[-•*]|\d+[.)])\s*", line)
+        prefix = bullet.group(0) if bullet else ""
+        items = []
+        for item in line[len(prefix):].split(";"):
+            item = _VET_TAG.sub("", item).strip(" .")
+            if not item or _DISALLOWED.search(item) or item.lower().startswith("ask your vet"):
+                continue
+            items.append(item)
+        if items:
+            out.append(prefix + "; ".join(items))
+    return out
+
+
+def _enforce_medicine_rules(answer: str) -> str:
+    """Generic names, plain words, no disallowed drugs in **Medicine**."""
+    out: list[str] = []
+    section: list[str] | None = None  # collecting the Medicine section's lines
+
+    def flush() -> None:
+        out.extend(_medicine_items(section) or ["Ask your vet."])
+        out.append("")
+
+    for line in _plain(_clean_brands(_normalise(answer))).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("**"):
+            if section is not None:
+                flush()
+            section = [] if stripped.lower().startswith("**medicine") else None
+            out.append(line)
+        elif section is not None:
+            if stripped:
+                section.append(line)
+        elif not _DISALLOWED.search(line):
+            # Outside the medicine list a disallowed name can only be an instruction to use it.
+            out.append(line)
+
+    if section is not None:
+        flush()
+    return "\n".join(out).strip()
 
 
 def _extract_care_level(text: str) -> tuple[str, str]:
@@ -170,6 +299,7 @@ def advise_node(state: AgentState) -> dict:
                 feature="advisor",
             )
             answer, care_level = _extract_care_level(response.content)
+            answer = _enforce_medicine_rules(_strip_doc_references(answer))
             meta = {
                 "target": response.target_label,
                 "model": response.model,
@@ -187,8 +317,6 @@ def advise_node(state: AgentState) -> dict:
         if settings.SHOW_CITATIONS_IN_ADVICE and documents:
             sources = sorted({d["source"] for d in documents})
             answer += "\n\n*Based on: " + ", ".join(sources[:3]) + "*"
-
-        answer += _DISCLAIMER
 
         logfire.info("Advice generated", care_level=care_level, passages=passages_used)
 

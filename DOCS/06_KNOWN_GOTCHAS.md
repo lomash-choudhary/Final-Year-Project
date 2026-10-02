@@ -10,13 +10,19 @@ The most common misreading of the free-tier plan. Groq serves chat/completion mo
 "Gemini first, then Groq" cannot apply to embeddings — the two ladders are separate:
 
 ```
-EMBEDDINGS   Gemini  →  local sentence-transformers
+EMBEDDINGS   Gemini key 1  →  Gemini key 2 (same model)  →  local sentence-transformers
 REASONING    Groq key 1 · GROQ_PRIMARY_MODEL  →  Groq key 2 · GROQ_PRIMARY_MODEL
           →  Groq key 1 · GROQ_FAST_MODEL     →  Groq key 2 · GROQ_FAST_MODEL
           →  Gemini · GEMINI_CHAT_MODEL
 ```
 
-Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning side.
+Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning side. The
+embedding side has its own: `GEMINI_FALLBACK_API_KEY` runs the **same** `GEMINI_EMBEDDING_MODEL`
+(same vector space, same dimension, same cache entries), so swapping keys mid-run is safe in a way
+swapping models never is. A batch spends `EMBED_MAX_RETRIES` retries on the active key, then moves
+to the next key, which stays active for the rest of the run. Each key has its own rate limiter.
+The free quota belongs to a Google Cloud *project* — a second key from the same project shares it
+and buys nothing.
 
 ---
 
@@ -184,6 +190,11 @@ which produces a run that succeeds for four files and then 429s continuously.
 `EMBED_MAX_RPM` is counted in texts for this reason. At the default 90, a 805-chunk corpus takes
 about nine minutes of wall-clock. That pacing is the feature.
 
+There is also a **daily** cap of roughly 1000 texts per Google Cloud project. The ~2200-chunk corpus
+cannot be embedded from scratch on one key in one day — that is what `GEMINI_FALLBACK_API_KEY` and
+the embedding cache are for. Adding 1474 chunks on 2026-10-01 exhausted the primary key's day after
+~950 texts; the run failed over to the fallback key and finished without intervention.
+
 ---
 
 ## 16. Exponential backoff alone cannot clear a per-minute quota
@@ -322,3 +333,14 @@ Note that Groq's `GET /v1/models` and `/chat/completions` sit behind Cloudflare,
 `403 error code: 1010` to clients sending no `User-Agent` (Python's bare `urllib` among them). That
 403 is a client-fingerprint rejection, **not** an invalid key — resend with a normal `User-Agent`
 before concluding anything about your credentials.
+
+---
+
+## 23. A non-empty page can still be unusable text
+
+The PDF cascade originally fell through to the next tier only on an **empty** page. An OCR'd
+archive.org scan extracted through pypdf with every space missing — 72 of 82 pages arrived as one
+token each — and passed every check, because it was not empty. It would have embedded 122 chunks
+of noise. The loader now scores each page's "glued" share (characters inside >25-char tokens) and
+re-extracts pages above 0.5 with PyMuPDF. Run `--dry-run` on new PDFs and look at the text: the
+check is cheap, and this class of defect is invisible in the run summary.

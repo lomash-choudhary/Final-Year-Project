@@ -75,6 +75,10 @@ class Settings:
     # .env (documented in .env.example); blank means "this tier is unavailable",
     # and `validate()` says so out loud instead of guessing a replacement.
     GEMINI_API_KEY: str = field(default_factory=lambda: _str("GEMINI_API_KEY"))
+    # Second key, same embedding model. The free quota (texts/min and texts/day)
+    # belongs to the Google Cloud *project*, so this only helps if the key comes
+    # from a different project. Used after the primary exhausts EMBED_MAX_RETRIES.
+    GEMINI_FALLBACK_API_KEY: str = field(default_factory=lambda: _str("GEMINI_FALLBACK_API_KEY"))
     GEMINI_EMBEDDING_MODEL: str = field(default_factory=lambda: _str("GEMINI_EMBEDDING_MODEL"))
     GEMINI_CHAT_MODEL: str = field(default_factory=lambda: _str("GEMINI_CHAT_MODEL"))
 
@@ -116,10 +120,25 @@ class Settings:
     # embedded — a batch of 16 costs 16 units, not 1. Throttling batches instead
     # of texts is how a run sails past the ceiling and 429s on the fifth file.
     EMBED_MAX_RPM: int = field(default_factory=lambda: _int("EMBED_MAX_RPM", 90))
+    # Retries per batch on the active key before failing over to the next key
+    # (GEMINI_FALLBACK_API_KEY). 5 retries = 6 calls, each honouring retryDelay.
     EMBED_MAX_RETRIES: int = field(default_factory=lambda: _int("EMBED_MAX_RETRIES", 5))
     EMBEDDING_CACHE_ENABLED: bool = field(default_factory=lambda: _bool("EMBEDDING_CACHE_ENABLED", True))
     EMBEDDING_CACHE_PATH: str = field(
         default_factory=lambda: _str("EMBEDDING_CACHE_PATH", ".cache/embeddings.sqlite3")
+    )
+
+    # ── language gate ─────────────────────────────────────────────────────────
+    # Ingest English documents only. Everything between translate_in and
+    # translate_out is English, so a Russian passage retrieved into the context is
+    # unreadable noise for the answer prompt. Shares are fractions (0-1): English
+    # papers here measure 1.00 Latin letters and 0.21-0.33 function words; the one
+    # Russian paper measured 0.34 Latin. Already-indexed files are only re-checked
+    # with --force (unchanged files are skipped before they are read).
+    INGEST_ENGLISH_ONLY: bool = field(default_factory=lambda: _bool("INGEST_ENGLISH_ONLY", True))
+    INGEST_MIN_LATIN_SHARE: float = field(default_factory=lambda: _float("INGEST_MIN_LATIN_SHARE", 0.9))
+    INGEST_MIN_ENGLISH_STOPWORDS: float = field(
+        default_factory=lambda: _float("INGEST_MIN_ENGLISH_STOPWORDS", 0.12)
     )
 
     # ── chunking ──────────────────────────────────────────────────────────────
@@ -147,7 +166,9 @@ class Settings:
     # How many times in a row the assistant may ask follow-up questions before it
     # must answer with whatever it has. 1 keeps the conversation moving.
     MAX_CLARIFICATION_ROUNDS: int = field(default_factory=lambda: _int("MAX_CLARIFICATION_ROUNDS", 1))
-    MAX_FOLLOW_UP_QUESTIONS: int = field(default_factory=lambda: _int("MAX_FOLLOW_UP_QUESTIONS", 4))
+    # Hard cap on questions per clarification round. 2: farmers stop reading a
+    # questionnaire, and one well-chosen question usually settles home vs. vet.
+    MAX_FOLLOW_UP_QUESTIONS: int = field(default_factory=lambda: _int("MAX_FOLLOW_UP_QUESTIONS", 2))
     # Farmers get plain advice; researchers get [n] citations. Turning this on
     # puts citation markers into consumer answers too.
     SHOW_CITATIONS_IN_ADVICE: bool = field(default_factory=lambda: _bool("SHOW_CITATIONS_IN_ADVICE", False))

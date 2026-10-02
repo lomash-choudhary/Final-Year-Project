@@ -2,8 +2,8 @@
 
 ## What this system is
 
-A question-answering system over a fixed corpus of 16 peer-reviewed papers on cattle and buffalo
-disease. It answers only from those papers, cites the source and page for every claim, and says so
+A question-answering system over a fixed corpus of 44 English veterinary PDFs on cattle and
+buffalo disease. It answers only from those documents, cites the source and page for every claim, and says so
 when the corpus does not cover something.
 
 "Agentic" here is not decoration. The agent makes three decisions per query that a linear

@@ -54,6 +54,14 @@ def check_config() -> int:
         "set (second free quota)" if settings.GROQ_FALLBACK_API_KEY else "missing — no key-level failover",
     )
     line(OK if settings.GEMINI_API_KEY else FAIL, "GEMINI_API_KEY", "set" if settings.GEMINI_API_KEY else "missing")
+    gemini_fb = settings.GEMINI_FALLBACK_API_KEY
+    line(
+        OK if gemini_fb and gemini_fb != settings.GEMINI_API_KEY else WARN,
+        "GEMINI_FALLBACK_API_KEY",
+        "set (embedding key failover)" if gemini_fb and gemini_fb != settings.GEMINI_API_KEY
+        else "same as GEMINI_API_KEY — ignored" if gemini_fb
+        else "missing — no embedding key failover",
+    )
     line(
         OK if settings.LOGFIRE_TOKEN else WARN,
         "LOGFIRE_TOKEN",
@@ -201,7 +209,7 @@ def check_live() -> int:
 
         vector = embedding.embed_query("bovine theileriosis prevalence")
         backend = embedding.get_backend()
-        line(OK, "embeddings", f"{backend.name}/{backend.model} — {len(vector)}-dim")
+        line(OK, "embeddings", f"{backend.name}/{backend.model} — {len(vector)}-dim, {backend.key_label} key")
     except Exception as exc:
         line(FAIL, "embeddings", str(exc)[:110])
         failures += 1

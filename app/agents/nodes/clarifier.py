@@ -16,8 +16,11 @@ Three rules keep it from becoming annoying:
 1. **It never asks twice in a row.** `awaiting_clarification` is carried across
    turns by the checkpointer, so when the user replies to the questions, the
    node knows this message is an answer and moves straight to advice.
-2. **It only asks when the answer would actually change.** A question already
-   containing duration, temperature and appetite does not need follow-ups.
+2. **It only asks when the answer would actually change.** The default is to
+   answer. A specific problem ("limping, wound between the hooves") is answered
+   directly; routine checklist questions (duration, appetite, pregnancy) are
+   never asked just to be thorough — an early prompt that listed them as
+   examples made the model ask all four on every turn.
 3. **It is bounded** by MAX_CLARIFICATION_ROUNDS.
 
 Asking is also the cheapest possible turn: no retrieval, no big model, no
@@ -34,7 +37,8 @@ from app.agents.state import AgentState
 from app.config import settings
 from app.llm import AllTargetsFailed, router
 
-_PROMPT = """You are a veterinary assistant triaging a livestock owner's problem before giving advice.
+_PROMPT = """You are a veterinary assistant deciding whether to answer a livestock owner's problem \
+now, or ask a follow-up question first.
 
 CONVERSATION SO FAR:
 {history}
@@ -42,25 +46,29 @@ CONVERSATION SO FAR:
 FARMER'S LATEST MESSAGE:
 "{message}"
 
-Decide whether you need more information before you can give safe, specific advice.
+The default is NO — answer directly. Most messages already contain enough to give useful advice, \
+and every question you ask delays help for the animal.
 
-Ask for more ONLY if the missing details would genuinely change your advice — for example how long \
-the problem has lasted, whether there is fever, whether the animal is eating, drinking or \
-ruminating, whether it is pregnant or recently calved, or what the dung and milk look like.
+Answer YES only if BOTH are true:
+1. You genuinely cannot tell from the message whether this is a home-care problem or a vet problem, \
+or which of two clearly different treatments applies.
+2. One or two specific answers would settle that.
 
-Do NOT ask if:
-- the farmer has already given those details
-- the question is general knowledge rather than a sick animal
-- the signs described are already severe enough to need a vet regardless of the answers
+Always answer NO when:
+- the problem is specific enough to advise on (e.g. "limping with a wound between the hooves", \
+"swollen udder with clots in the milk", "calf with diarrhoea")
+- the signs are already serious enough to need a vet regardless of the answers
+- the question is general knowledge rather than about one sick animal
+- the farmer has already given the key details
 
-Ask at most {max_questions} questions. Keep each one short, plain, and answerable by someone \
-standing next to the animal. No medical jargon.
+Never ask routine checklist questions (duration, appetite, pregnancy, dung) just to be thorough. \
+Ask only the question whose answer would change your advice. At most {max_questions}, fewer is \
+better. Short, plain, answerable by someone standing next to the animal.
 
 Reply in exactly this format and nothing else:
 NEED_MORE: <YES or NO>
 QUESTIONS:
-- <question 1>
-- <question 2>"""
+- <question, only if YES>"""
 
 
 def _format_history(messages: list[dict], limit: int = 6) -> str:
@@ -98,12 +106,10 @@ def _parse(raw: str, limit: int) -> tuple[bool, list[str]]:
 
 
 def _compose_message(questions: list[str]) -> str:
-    lines = [
-        "I can help with that. A few quick questions so I can give you the right advice:",
-        "",
-    ]
+    if len(questions) == 1:
+        return f"Quick question before I advise: {questions[0]}"
+    lines = ["Quick questions before I advise:", ""]
     lines += [f"{i}. {q}" for i, q in enumerate(questions, start=1)]
-    lines += ["", "You can answer in one message — even short answers help."]
     return "\n".join(lines)
 
 

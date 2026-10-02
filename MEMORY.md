@@ -3,7 +3,7 @@
 Durable project context that is **not** derivable from the code: current state, settled decisions,
 and open threads. Working instructions live in [AGENTS.md](AGENTS.md).
 
-Last reviewed: 2026-10-01.
+Last reviewed: 2026-10-02.
 
 **Every session must update this file before it ends** — protocol in AGENTS.md §12.
 
@@ -26,13 +26,21 @@ Last reviewed: 2026-10-01.
 
 ## Current state (verified 2026-10-01)
 
-- Branch `main`, clean tree, HEAD `250125f`. History: `init` → ingestion runs → deployment-ready →
+- Branch `main`, HEAD `fcf4e7d` (30 new PDFs added) + uncommitted 2026-10-01 changes: Gemini
+  embedding key failover, soft-hyphen cleaning, glued-page PyMuPDF re-extraction (+ docs).
+  Earlier: HEAD `250125f`. History: `init` → ingestion runs → deployment-ready →
   monitoring fixes → translation/clarification nodes (`ce1d768`) → two "code refactor, model
   update" commits on 2026-09-12 (`9133c21`, `250125f`) that removed every hardcoded model name
   (AGENTS.md invariant 19) and added `AGENTS.md` / `CLAUDE.md` / `MEMORY.md`.
-- **Corpus ingested**: 16 PDFs in `DATA/` → 15 indexed `ok`, 1 detected as a content-level
-  duplicate. **805 chunks / 805 points** in Qdrant, `recursive` chunk strategy,
-  `models/gemini-embedding-001` at **3072 dimensions**. Manifest timestamps are 2026-08-08.
+- **Corpus ingested (verified 2026-10-01)**: 46 PDFs in `DATA/` → 44 indexed `ok`, 1 content-level
+  duplicate (`Theileriosis_prevalence_status_in_cattle-2.pdf`), 1 skipped as non-English (`11.pdf`,
+  Russian — owner wants **English PDFs only**). **2175 chunks / 2175 points** in
+  Qdrant Cloud, `models/gemini-embedding-001` at **3072 dimensions**. The original 15 files
+  (805 points, 2026-08-08) were skipped unchanged; the 30 new ones added 1474, minus 104 removed
+  for `11.pdf`.
+- Corpus now goes beyond the original haemoprotozoa/brucellosis/LSD focus: AABP proceedings on
+  antimicrobial use/resistance, mastitis, lameness, BRD, mycoplasma, plus a 1900s archive.org
+  book (`notesondiseaseof00kori.pdf`).
 - Deployment: the API is deployment-ready for a PaaS (Render-shaped) using `.env.prod` and
   `requirements-prod.txt`. **The deployed server never ingests** — ingestion runs locally against
   the same Qdrant cluster, which is why the prod requirements exclude PyTorch and the eval stack.
@@ -43,6 +51,9 @@ Last reviewed: 2026-10-01.
 
 ## Settled decisions (do not re-litigate without a reason)
 
+- **English-only corpus** (owner decision 2026-10-01). Enforced by the ingestion language gate
+  `processor._english_check` (`INGEST_ENGLISH_ONLY`); a non-English PDF stays in `DATA/` but is
+  never indexed.
 - **Own LLM gateway instead of Portkey/LiteLLM.** `app/llm/router.py` implements routing,
   failover, retries, backoff and a TTL cache in-process. `PORTKEY_API_KEY` / `ENABLE_PORTKEY`
   remain in config as inert placeholders; `DOCS/09` explains what a hosted gateway would add.
@@ -55,8 +66,11 @@ Last reviewed: 2026-10-01.
 - **Evals hit the live API rather than importing the graph**, so guardrails, gateway fallback and
   the self-correction loop are inside what is measured.
 - **Safety posture of the farmer path is deliberately conservative**: red-flag signs force
-  `vet_now`, no prescription medicines or doses are ever named, and an unparsable care level
-  defaults to `vet_soon`. A false "see a vet" costs a consultation fee; a false "treat at home"
+  `vet_now` (answer collapses to "Contact a vet now" + ≤2 safe steps), and an unparsable care level
+  defaults to `vet_soon`. **Changed 2026-10-02 (owner request):** the advisor now names medicines,
+  but only ones the retrieved passages name, and prescription drugs get no dose ("vet must
+  prescribe"). Answers are capped at ~100 words in four sections (Likely cause / Medicine / What to
+  do / Call the vet if); the owner wants short, on-point answers. A false "see a vet" costs a consultation fee; a false "treat at home"
   can cost the animal.
 
 ---
@@ -66,6 +80,11 @@ Last reviewed: 2026-10-01.
 - `Firstpaper.pdf` is a **124-page journal issue**, not a single paper. Its aggressive running
   headers are the reason the header stripper exists; it is the usual suspect when retrieval
   surfaces irrelevant chunks.
+- **Gemini free embedding quota also has a daily cap of ~1000 texts per project.** On
+  2026-10-01 the primary key 429'd after ~900–1000 texts that day (retryDelay ~59s, never clears)
+  and the run failed over to `GEMINI_FALLBACK_API_KEY` for the last ~10 files. A full re-ingest
+  (~2200 texts) needs ~3 project-days of quota — **never `--wipe` casually**; the embedding cache
+  (`.cache/embeddings.sqlite3`) is what makes a rebuild free, so do not delete it either.
 - Gemini's free embedding quota (`limit: 100`) is charged **per text, not per request** — hence
   `EMBED_MAX_RPM` being counted in texts. A full 805-chunk ingest takes ~9 minutes of deliberate
   pacing.
@@ -76,6 +95,22 @@ Last reviewed: 2026-10-01.
   feed nonsense to the retriever — `translator.detect_language` uses a marker-word list for this,
   and `fast_rails._DOMAIN_TERMS` carries Hinglish vocabulary because guardrails run *before*
   translation.
+- `notesondiseaseof00kori.pdf` (1900s) contains archaic remedies (turpentine, udder inflation for
+  milk fever, …). The advisor prompt explicitly forbids passing on outdated or unsafe remedies.
+- Clarifier default is now **answer directly** (owner: "only ask if really needed"). The old prompt
+  listed duration/fever/appetite/pregnancy as examples and the model asked all four every turn.
+  `MAX_FOLLOW_UP_QUESTIONS` 4 → 2 (code default, `.env`, `.env.example`). Live check 2026-10-02:
+  hoof wound / mild fever / red urine → no questions; "my cow is not well" → 1 question.
+- `LANGSMITH_API_KEY` in `.env` returns 401 (seen 2026-10-02) — tracing to LangSmith is not
+  working; Logfire unaffected.
+- Planner SYMPTOM rewrite must keep **what the farmer asks for** ("what to apply/give"). The
+  "…causes and treatment" rewrite (2026-10-02, reverted same day) dropped it, and the hoof-wound
+  query then missed both the oxytetracycline-spray and copper-sulfate-dressing passages.
+- Farmer path drops reference-list chunks before rerank (`retriever._is_reference_list`, citation
+  density ≥ 6/1000 chars). Not applied to research: prevalence tables score the same.
+- Advisor medicine rules are enforced in code (`_enforce_medicine_rules`) — gpt-oss-120b ignored
+  the prompt for brand names, clenbuterol and phenothiazine. Prompt has no persona and no disclaimer
+  (owner: disclaimer to be added later, keep the prompt lean).
 - The typo'd directory name `Understading_the_project/` is personal study notes and is gitignored
   on purpose — not a deliverable, do not tidy it into the docs.
 - Live artefacts (`processed_data/`, `ingestion_manifest.json`, `.cache/`, `evals/results/`) are
@@ -85,6 +120,8 @@ Last reviewed: 2026-10-01.
 
 ## Open threads / known limitations
 
+- The new embedding failover/cleaning/loader changes are **uncommitted** as of 2026-10-01 —
+  owner to review and commit.
 - **Image-only (scanned) PDF pages have no OCR tier.** After all three extractors they are
   reported as warnings and skipped. A tier-4 OCR path is the obvious next extension.
 - **`MemorySaver` is in-process.** Conversation state does not survive an API restart and is not
@@ -110,3 +147,44 @@ One dated line per session, newest last: what was done, what is left.
   facts above not re-verified this session (Qdrant not queried).
 - 2026-10-01 — `CLAUDE.md` reduced to the single line `@AGENTS.md`; all guidance lives in
   `AGENTS.md` only (owner's preference — never add content to `CLAUDE.md`).
+- 2026-10-01 — Ingested the 30 PDFs added in `fcf4e7d` (805 → 2279 points, 0 failures, ~33 min at
+  `EMBED_MAX_RPM=60` via CLI env override). Added `GEMINI_FALLBACK_API_KEY` (per-key limiter,
+  failover after `EMBED_MAX_RETRIES` retries, sticky) — it fired live once. Fixed soft hyphens
+  (AABP scans) and glued-word pages (archive.org book → PyMuPDF). Left: commit; evals not re-run
+  on the larger corpus; golden set does not cover the new topics.
+- 2026-10-01 — Owner asked for English-only: added ingestion language gate, removed `11.pdf`
+  (Russian, 104 points) → 2175 points. Only non-English file in the corpus. Still uncommitted.
+- 2026-10-01 — Audited Qdrant directly: 2175 points / 44 sources, all English (per-document and
+  per-chunk check), exact match with manifest; only 11.pdf (non-English) and the Theileriosis
+  duplicate are absent by design. Incremental run embedded nothing — corpus fully ingested.
+- 2026-10-02 — Advisor reworked per owner: short four-section format, names corpus-grounded medicines
+  (prescription drugs: no dose), vet_now → "Contact a vet now". Planner symptom queries now add
+  "causes and treatment". AGENTS.md invariant 17 updated. Added `questions.md` (28 test questions:
+  medicine / vet-now / edge / Hindi). Left: not live-tested (API was down); commit; evals not re-run.
+- 2026-10-02 — Clarifier reworked to default to answering directly; max 2 questions, shorter
+  wording. Live-tested on 4 messages (see facts). Left: full graph not run end-to-end; commit.
+- 2026-10-02 — Verified hoof-wound answer ("Naxcel (Ceftiofur)") is grounded in
+  aabp_1998 LamenessOfDairyCattle p6. Prompt tweaked: generic names only (corpus is US-heavy, brand
+  names useless in India), up to 3 options, topical treatment first when the farmer asks what to apply.
+- 2026-10-02 — Hoof-wound answer now correct (ceftiofur/penicillin/sulfadimethoxine + antiseptic,
+  matches aabp_1998 p6) but leaked "(Appendix I)" from passage text → prompt rule + regex strip
+  (`advisor._strip_doc_references`). Open: retrieval top-5 for hoof wound is 4× aabp_1998 (one a
+  reference list) + kori book; the copper-sulfate/formalin dressing passage in
+  animals-14-01836-v2.pdf is not retrieved. Reference-list chunks wasting rerank slots is worth fixing.
+- 2026-10-02 — Owner unhappy with answer quality. Root cause was retrieval (planner rewrite lost the
+  question). Fixed planner rewrite, reference-list filter, lean advisor prompt (no persona/disclaimer,
+  fallback never mentions "sources"), code-enforced medicine rules. Full graph run on 6 questions:
+  hoof → oxytetracycline/lincomycin topical, mastitis → penicillin/ceftiofur, theileriosis →
+  buparvaquone, red urine → vet_now. Open: calf cough retrieves the 1987 bronchodilator paper rather
+  than the BRD antibiotic passages (tilmicosin/florfenicol); evals not re-run.
+- 2026-10-02 — Owner asked whether "(vet must prescribe)" came from the data: it did NOT — it is a
+  blanket code rule (allowlist of farm remedies; everything else tagged). Replaced per-item tags
+  with one line under Medicine; "(topical)" → "(put on the wound)"; Unicode normalised before the
+  regexes. Verified hoof-answer drugs in corpus: oxytetracycline/lincomycin gauze (aabp_1998 p5,
+  digital dermatitis), silver sulfadiazine (animals-14 p10, sole ulcer), foot-rot injection drugs
+  (aabp_1998 p6). Open: owner may want the prescription line removed or reworded.
+- 2026-10-02 — Owner: no "(vet must prescribe)" or prescription notes in answers — the frontend
+  will carry the disclaimer. Removed the note line, the farm-remedy allowlist and the prompt rule;
+  the model's own vet tags are stripped. No doses for prescription drugs is unchanged.
+
+- 2026-10-02 — Q&A only: explained the INGEST_ENGLISH_ONLY language gate to the owner. No code change.

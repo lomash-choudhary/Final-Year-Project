@@ -14,16 +14,17 @@ checkouts of these same files, not separate sources.)
 
 ## 1. What this project is
 
-**Bovine Disease Research Assistant** — an agentic RAG system over 16 peer-reviewed papers on
+**Bovine Disease Research Assistant** — an agentic RAG system over 44 indexed English veterinary PDFs on
 cattle and buffalo disease (haemoprotozoal infections, brucellosis, lumpy skin disease, foot and
-eye disorders, genetic disorders, *E. coli*, dairy-herd health).
+eye disorders, genetic disorders, *E. coli*, dairy-herd health, mastitis, lameness, respiratory
+disease, antimicrobial use and resistance).
 
 It serves **two audiences through one LangGraph graph**:
 
 | Audience | Example input | Path | Output shape |
 |---|---|---|---|
 | Researcher | "prevalence of theileriosis in India" | planner → retriever → grader → **responder** | grounded prose with inline `[n]` citations + page-accurate sources |
-| Farmer | "meri gaay khana nahi kha rahi" | planner → clarifier → retriever → grader → **advisor** | plain-language *What this looks like / What to do now / Watch for* + `care_level` badge |
+| Farmer | "meri gaay khana nahi kha rahi" | planner → clarifier → retriever → grader → **advisor** | short *Likely cause / Medicine / What to do / Call the vet if* (or *Contact a vet now*) + `care_level` badge |
 
 Hard constraint that explains most design decisions: **everything must run on free tiers.**
 Gemini for embeddings, Groq for reasoning (multiple keys chained), Qdrant local/free-cloud,
@@ -74,7 +75,7 @@ evals/                            golden_dataset.json · pipeline.py · metrics.
 ui/app.py                         Streamlit chat UI
 scripts/doctor.py                 preflight check (no API calls by default)
 DOCS/01..10                       deep-dive docs — 06_KNOWN_GOTCHAS.md is the important one
-DATA/                             the corpus (16 PDFs)
+DATA/                             the corpus (46 PDFs; 44 indexed — 1 duplicate, 1 non-English)
 processed_data/                   generated: parsed+chunked JSON per document (gitignored)
 ingestion_manifest.json           generated: ingestion state (gitignored)
 .cache/embeddings.sqlite3         generated: embedding cache (gitignored)
@@ -192,8 +193,12 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
 15. **`--dry-run` must not write the manifest** (`Manifest(..., read_only=True)`), or the next real
     run skips the whole corpus.
 16. **Evals hit the live API, not the graph.** What is measured is the system as deployed.
-17. **The advisor never names a prescription medicine or dose**, and red-flag signs force
-    `care_level = vet_now` regardless of what the passages say. Default on a missing/unparsable
+17. **The advisor names a medicine only when the retrieved passages name it** — never from model
+    memory — and never doses a prescription drug (name only; no prescription notes — the frontend carries
+    the disclaimer). These are **enforced in code after the model** (`advisor._enforce_medicine_rules`:
+    brand → generic, banned/obsolete drugs dropped, the model's own vet notes stripped; jargon like "(topical)"
+    rewritten; Unicode folded first because gpt-oss emits U+2011 hyphens) because the prompt alone did not hold. Red-flag signs force `care_level = vet_now` regardless of what the passages say,
+    and a `vet_now` answer collapses to "Contact a vet now" + at most two safe steps. Default on a missing/unparsable
     care level is the conservative `vet_soon`.
 18. **Farmer answers carry no citation markers and no sources panel** (`main.py` suppresses
     `sources` when `intent == "symptom"`); the advisor's context is deliberately unnumbered so the
@@ -271,7 +276,7 @@ Everything lives in `.env` (see `.env.example`, documented in `DOCS/05_ENVIRONME
 | Needed | Variable |
 |---|---|
 | Required | `GEMINI_API_KEY` (embeddings), `GROQ_API_KEY` (reasoning), `QDRANT_CLUSTER_ENDPOINT` |
-| Strongly recommended | `GROQ_FALLBACK_API_KEY` (a real second free quota) |
+| Strongly recommended | `GROQ_FALLBACK_API_KEY` (a real second free quota), `GEMINI_FALLBACK_API_KEY` (embedding key failover, different GCP project) |
 | Required (models) | `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_EMBEDDING_MODEL` — nothing is defaulted in code |
 | Optional | `GROQ_TRANSLATE_API_KEY`, `GROQ_CLARIFIER_API_KEY`, `GROQ_ADVISOR_API_KEY`, `QDRANT_API_KEY` (cloud only), `LOGFIRE_TOKEN`, `LANGSMITH_API_KEY`, `JUDGE_GROQ` |
 | Optional (models) | `GROQ_TRANSLATE_MODEL`, `GEMINI_CHAT_MODEL`, `LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL` |

@@ -25,6 +25,20 @@ rejecting every upsert.
 Because Qdrant fixes the dimension at collection creation, the backend is chosen
 once per process and then locked. If Gemini dies mid-run we raise instead of
 quietly switching to a 768-dim local model, which would corrupt the index.
+
+Key-level failover (GEMINI_FALLBACK_API_KEY)
+--------------------------------------------
+What *can* change safely mid-run is the API key. The free quota (~100 texts/min,
+and a daily cap) belongs to a Google Cloud project, so a key from a second
+project is a genuine second quota for the *same* model — same vector space,
+same dimension, same cache entries. Each key gets its own rate limiter, because
+a cooldown the primary was told to observe says nothing about the fallback's
+window. A batch spends EMBED_MAX_RETRIES attempts on the active key; when those
+are exhausted on rate-limit errors, the same batch moves to the next key with a
+fresh budget, and that key stays active for the rest of the run (a key that just
+failed five times is usually out for the day, not the minute). Only when every
+key has exhausted its budget on one batch does the run raise — and the manifest
+resumes from that file next time.
 """
 
 from __future__ import annotations
@@ -168,26 +182,50 @@ class _RateLimiter:
 
 
 @dataclass
+class _KeySlot:
+    """One credential's clients and its own quota accounting."""
+    label: str                                       # "primary" | "fallback" | "local"
+    limiter: _RateLimiter
+    embed_documents: Callable[[list[str]], list[list[float]]]
+    embed_single: Callable[[str], list[float]]
+
+
+@dataclass
 class EmbeddingBackend:
     name: str                                        # "gemini" | "local"
     model: str
     dim: int
-    embed_documents: Callable[[list[str]], list[list[float]]]
-    embed_single: Callable[[str], list[float]]
+    slots: list[_KeySlot]                            # tried in order; same model on every slot
+    active: int = 0                                  # sticky: index of the slot currently in use
+
+    @property
+    def key_label(self) -> str:
+        return self.slots[self.active].label
 
 
 # ── module state (initialised once, then locked) ──────────────────────────────
 _backend: EmbeddingBackend | None = None
 _init_lock = threading.Lock()
-_limiter = _RateLimiter(settings.EMBED_MAX_RPM)
 _cache = EmbeddingCache(settings.resolve_path(settings.EMBEDDING_CACHE_PATH), settings.EMBEDDING_CACHE_ENABLED)
 
 
 # ── Gemini backend ─────────────────────────────────────────────────────────────
 
+def _gemini_keys() -> list[tuple[str, str]]:
+    """(label, key) pairs in failover order. A fallback equal to the primary shares its quota."""
+    keys = [("primary", settings.GEMINI_API_KEY)] if settings.GEMINI_API_KEY else []
+    fallback = settings.GEMINI_FALLBACK_API_KEY
+    if fallback and fallback != settings.GEMINI_API_KEY:
+        keys.append(("fallback", fallback))
+    elif fallback:
+        logfire.warning("GEMINI_FALLBACK_API_KEY equals GEMINI_API_KEY — it shares the same quota; ignored")
+    return keys
+
+
 def _build_gemini() -> EmbeddingBackend | None:
     """Build the Gemini backend from the one configured model, or return None."""
-    if not settings.GEMINI_API_KEY:
+    keys = _gemini_keys()
+    if not keys:
         logfire.info("No GEMINI_API_KEY — skipping Gemini embedding tier")
         return None
 
@@ -200,7 +238,7 @@ def _build_gemini() -> EmbeddingBackend | None:
     # One name, straight from .env. There is no candidate list to fall through
     # to: the alternatives embed at a different width, so "try the next one" would
     # mean writing 768-dim vectors into a 3072-dim collection. Blank means this
-    # tier is unconfigured, not "use the usual one".
+    # tier is unconfigured, not "use the usual one". Every key uses this same name.
     model_name = settings.gemini_embedding_model
     if not model_name:
         logfire.warning(
@@ -209,56 +247,61 @@ def _build_gemini() -> EmbeddingBackend | None:
         )
         return None
 
-    try:
+    slots: list[_KeySlot] = []
+    asymmetric = True
+    for label, api_key in keys:
         # task_type is a real quality lever: asymmetric embeddings score
         # documents and queries in different spaces. Older versions of the
         # package do not accept the kwarg, hence the TypeError branch.
         try:
             doc_model = GoogleGenerativeAIEmbeddings(
-                model=model_name,
-                google_api_key=settings.GEMINI_API_KEY,
-                task_type="retrieval_document",
+                model=model_name, google_api_key=api_key, task_type="retrieval_document",
             )
             query_model = GoogleGenerativeAIEmbeddings(
-                model=model_name,
-                google_api_key=settings.GEMINI_API_KEY,
-                task_type="retrieval_query",
+                model=model_name, google_api_key=api_key, task_type="retrieval_query",
             )
-            asymmetric = True
         except TypeError:
-            doc_model = query_model = GoogleGenerativeAIEmbeddings(
-                model=model_name,
-                google_api_key=settings.GEMINI_API_KEY,
-            )
+            doc_model = query_model = GoogleGenerativeAIEmbeddings(model=model_name, google_api_key=api_key)
             asymmetric = False
+        slots.append(_KeySlot(
+            label=label,
+            limiter=_RateLimiter(settings.EMBED_MAX_RPM),
+            embed_documents=doc_model.embed_documents,
+            embed_single=query_model.embed_query,
+        ))
 
-        _limiter.acquire()
-        probe = query_model.embed_query("bovine theileriosis prevalence")
-        dim = len(probe)
-        if dim == 0:
-            raise EmbeddingError("probe returned an empty vector")
+    # Probe each key in order until one answers. A primary that is already out of
+    # daily quota must not fail the probe and push `auto` onto the 768-dim local
+    # model — that ends in DimensionMismatch against the 3072-dim collection.
+    for index, slot in enumerate(slots):
+        try:
+            slot.limiter.acquire()
+            probe = slot.embed_single("bovine theileriosis prevalence")
+            dim = len(probe)
+            if dim == 0:
+                raise EmbeddingError("probe returned an empty vector")
+        except Exception as exc:
+            logfire.warning(
+                "Gemini embedding probe failed on {key} key ({err})",
+                key=slot.label, model=model_name, err=str(exc)[:300],
+            )
+            continue
 
         logfire.info(
             "Gemini embeddings ready",
             model=model_name, dim=dim, asymmetric_task_types=asymmetric,
+            active_key=slot.label, keys=[s.label for s in slots],
         )
-        return EmbeddingBackend(
-            name="gemini",
-            model=model_name,
-            dim=dim,
-            embed_documents=doc_model.embed_documents,
-            embed_single=query_model.embed_query,
-        )
+        return EmbeddingBackend(name="gemini", model=model_name, dim=dim, slots=slots, active=index)
 
-    except Exception as exc:
-        # Do not substitute another Gemini model here. Returning None hands the
-        # decision to _init_backend(), which either falls back to the local model
-        # (a deliberate, logged, dimension-checked switch) or raises.
-        logfire.warning(
-            "Gemini embedding model '{model}' unavailable ({err}) — Gemini tier disabled",
-            model=model_name, err=str(exc)[:300],
-        )
-        return None
+    # Do not substitute another Gemini model here. Returning None hands the
+    # decision to _init_backend(), which either falls back to the local model
+    # (a deliberate, logged, dimension-checked switch) or raises.
+    logfire.warning(
+        "Gemini embedding model '{model}' unavailable on every key — Gemini tier disabled",
+        model=model_name, keys=[s.label for s in slots],
+    )
+    return None
 
 
 # ── local backend ──────────────────────────────────────────────────────────────
@@ -290,7 +333,8 @@ def _build_local() -> EmbeddingBackend:
 
     dim = len(_one("probe"))
     logfire.info("Local embeddings ready", model=name, dim=dim)
-    return EmbeddingBackend(name="local", model=name, dim=dim, embed_documents=_docs, embed_single=_one)
+    slot = _KeySlot(label="local", limiter=_RateLimiter(settings.EMBED_MAX_RPM), embed_documents=_docs, embed_single=_one)
+    return EmbeddingBackend(name="local", model=name, dim=dim, slots=[slot])
 
 
 def _init() -> EmbeddingBackend:
@@ -317,20 +361,43 @@ def _init() -> EmbeddingBackend:
             else:  # auto
                 _backend = _build_gemini() or _build_local()
 
-        logfire.info("Embedding backend locked", provider=_backend.name, model=_backend.model, dim=_backend.dim)
+        logfire.info(
+            "Embedding backend locked", provider=_backend.name, model=_backend.model, dim=_backend.dim,
+            active_key=_backend.key_label,
+        )
         return _backend
 
 
 # ── retry / batching ───────────────────────────────────────────────────────────
 
-def _embed_batch_with_retry(backend: EmbeddingBackend, batch: list[str], depth: int = 0) -> list[list[float]]:
-    """Embed one batch, retrying on transient errors and splitting on batch errors."""
-    max_attempts = max(1, settings.EMBED_MAX_RETRIES)
+class _KeyExhausted(Exception):
+    """The active key spent its whole retry budget on rate-limit / transient errors."""
+
+
+def _fail_over(backend: EmbeddingBackend, tried: int, last_exc: Exception) -> None:
+    """Advance to the next key, or raise if every key has had its budget for this call."""
+    if tried >= len(backend.slots):
+        raise EmbeddingError(
+            f"{backend.name}/{backend.model} embedding failed on every key "
+            f"({', '.join(s.label for s in backend.slots)}): {last_exc}"
+        ) from last_exc
+    previous = backend.key_label
+    backend.active = (backend.active + 1) % len(backend.slots)
+    logfire.warning(
+        "Embedding key '{old}' exhausted after {n} retries — switching to '{new}' key (same model)",
+        old=previous, new=backend.key_label, n=settings.EMBED_MAX_RETRIES, model=backend.model,
+    )
+
+
+def _embed_batch_on_slot(slot: _KeySlot, backend: EmbeddingBackend, batch: list[str], depth: int) -> list[list[float]]:
+    """Embed one batch on one key, retrying transient errors and splitting on batch errors."""
+    # EMBED_MAX_RETRIES counts retries, so the first try is extra: 5 -> 6 calls.
+    max_attempts = max(0, settings.EMBED_MAX_RETRIES) + 1
 
     for attempt in range(1, max_attempts + 1):
         try:
-            _limiter.acquire(len(batch))
-            return backend.embed_documents(batch)
+            slot.limiter.acquire(len(batch))
+            return slot.embed_documents(batch)
 
         except Exception as exc:
             # A batch that is structurally too large will fail identically on
@@ -342,36 +409,49 @@ def _embed_batch_with_retry(backend: EmbeddingBackend, batch: list[str], depth: 
                     err=str(exc)[:160], size=len(batch), a=mid, b=len(batch) - mid,
                 )
                 return (
-                    _embed_batch_with_retry(backend, batch[:mid], depth + 1)
-                    + _embed_batch_with_retry(backend, batch[mid:], depth + 1)
+                    _embed_batch_on_slot(slot, backend, batch[:mid], depth + 1)
+                    + _embed_batch_on_slot(slot, backend, batch[mid:], depth + 1)
                 )
 
-            if _is_retryable(exc) and attempt < max_attempts:
-                # Prefer the provider's own instruction. A quota window is
-                # ~60s wide, while exponential backoff tops out near 17s — so
-                # computed backoff alone just retries inside the same blocked
-                # minute and burns all five attempts for nothing.
-                mandated = _retry_after(exc)
-                computed = min(60.0, 2.0 ** attempt) + random.uniform(0, 1.5)
-                wait = max(mandated + 1.0, computed) if mandated else computed
+            if not _is_retryable(exc):
+                logfire.error("Embedding failed permanently: {err}", err=str(exc)[:400], key=slot.label)
+                raise EmbeddingError(
+                    f"{backend.name}/{backend.model} embedding failed on '{slot.label}' key: {exc}"
+                ) from exc
 
-                if mandated:
-                    _limiter.penalize(mandated)
+            if attempt == max_attempts:
+                raise _KeyExhausted(str(exc)[:400]) from exc
 
-                logfire.warning(
-                    "Embedding call failed ({err}) — retry {n}/{max} in {wait}s{src}",
-                    err=str(exc)[:200], n=attempt, max=max_attempts, wait=round(wait, 1),
-                    src=" (provider-specified)" if mandated else "",
-                )
-                time.sleep(wait)
-                continue
+            # Prefer the provider's own instruction. A quota window is
+            # ~60s wide, while exponential backoff tops out near 17s — so
+            # computed backoff alone just retries inside the same blocked
+            # minute and burns all five attempts for nothing.
+            mandated = _retry_after(exc)
+            computed = min(60.0, 2.0 ** attempt) + random.uniform(0, 1.5)
+            wait = max(mandated + 1.0, computed) if mandated else computed
 
-            logfire.error("Embedding failed permanently: {err}", err=str(exc)[:400])
-            raise EmbeddingError(
-                f"{backend.name}/{backend.model} embedding failed after {attempt} attempt(s): {exc}"
-            ) from exc
+            if mandated:
+                slot.limiter.penalize(mandated)
 
-    raise EmbeddingError(f"Embedding retries exhausted for {backend.name}/{backend.model}")
+            logfire.warning(
+                "Embedding call failed ({err}) — retry {n}/{max} on {key} key in {wait}s{src}",
+                err=str(exc)[:200], n=attempt, max=max_attempts - 1, key=slot.label, wait=round(wait, 1),
+                src=" (provider-specified)" if mandated else "",
+            )
+            time.sleep(wait)
+
+    raise _KeyExhausted("retry loop ended without a result")
+
+
+def _embed_batch_with_retry(backend: EmbeddingBackend, batch: list[str]) -> list[list[float]]:
+    """Embed one batch, failing over across keys when one exhausts its retry budget."""
+    tried = 0
+    while True:
+        tried += 1
+        try:
+            return _embed_batch_on_slot(backend.slots[backend.active], backend, batch, depth=0)
+        except _KeyExhausted as exc:
+            _fail_over(backend, tried, exc)
 
 
 # ── public API ─────────────────────────────────────────────────────────────────
@@ -389,7 +469,10 @@ def describe() -> dict:
     """Backend + cache snapshot for /health and ingestion reports."""
     try:
         backend = _init()
-        info = {"provider": backend.name, "model": backend.model, "dim": backend.dim}
+        info = {
+            "provider": backend.name, "model": backend.model, "dim": backend.dim,
+            "active_key": backend.key_label, "keys": [s.label for s in backend.slots],
+        }
     except Exception as exc:
         info = {"provider": "unavailable", "error": str(exc)[:200]}
     info["cache"] = _cache.stats()
@@ -447,7 +530,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
         with logfire.span(
             "Embed batch",
-            provider=backend.name, size=len(batch),
+            provider=backend.name, key=backend.key_label, size=len(batch),
             progress=f"{start + len(window)}/{len(pending_idx)}",
         ):
             vectors = _embed_batch_with_retry(backend, batch)
@@ -486,15 +569,25 @@ def embed_query(query: str) -> list[float]:
     if 0 in cached:
         return cached[0]
 
-    max_attempts = max(1, settings.EMBED_MAX_RETRIES)
-    for attempt in range(1, max_attempts + 1):
-        try:
-            _limiter.acquire(1)
-            vector = backend.embed_single(query)
-            _cache.put_many([query], [vector], backend.name, backend.model, backend.dim)
-            return vector
-        except Exception as exc:
-            if _is_retryable(exc) and attempt < max_attempts:
+    # EMBED_MAX_RETRIES counts retries, so the first try is extra: 5 -> 6 calls.
+    max_attempts = max(0, settings.EMBED_MAX_RETRIES) + 1
+    tried = 0
+    while True:
+        tried += 1
+        slot = backend.slots[backend.active]
+        last_exc: Exception | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                slot.limiter.acquire(1)
+                vector = slot.embed_single(query)
+                _cache.put_many([query], [vector], backend.name, backend.model, backend.dim)
+                return vector
+            except Exception as exc:
+                if not _is_retryable(exc):
+                    raise EmbeddingError(f"Query embedding failed on '{slot.label}' key: {exc}") from exc
+                last_exc = exc
+                if attempt == max_attempts:
+                    break
                 mandated = _retry_after(exc)
                 computed = min(30.0, 2.0 ** attempt) + random.uniform(0, 1.0)
                 # A live query cannot sit for a full minute waiting on quota, so
@@ -502,11 +595,8 @@ def embed_query(query: str) -> list[float]:
                 # it fully. Better a fast failure the caller can report.
                 wait = min(max(mandated, computed), 20.0) if mandated else computed
                 logfire.warning(
-                    "Query embedding retry {n}/{max} in {wait}s ({err})",
-                    n=attempt, max=max_attempts, wait=round(wait, 1), err=str(exc)[:200],
+                    "Query embedding retry {n}/{max} on {key} key in {wait}s ({err})",
+                    n=attempt, max=max_attempts - 1, key=slot.label, wait=round(wait, 1), err=str(exc)[:200],
                 )
                 time.sleep(wait)
-                continue
-            raise EmbeddingError(f"Query embedding failed: {exc}") from exc
-
-    raise EmbeddingError("Query embedding retries exhausted")
+        _fail_over(backend, tried, last_exc or EmbeddingError("query retries exhausted"))

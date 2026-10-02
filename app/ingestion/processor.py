@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -80,6 +81,41 @@ def _save_processed(filename: str, chunks: list[Chunk], meta: dict) -> Path:
     return dest
 
 
+# Common English function words. Real English prose — even dense methods
+# sections — runs 0.2-0.33 of all Latin-script words on this corpus; Spanish,
+# French or Portuguese text scores near zero because its function words differ.
+_ENGLISH_STOPWORDS = frozenset(
+    "the of and to in is was were that for with are by as on from be this which at or an "
+    "have has not it these their than been".split()
+)
+_LETTER = re.compile(r"[^\W\d_]")
+_LATIN_WORD = re.compile(r"[a-zA-Z]+")
+
+
+def _english_check(text: str) -> tuple[bool, str]:
+    """
+    Is this document English? Returns (ok, reason).
+
+    The whole graph between translate_in and translate_out is English-only, and the
+    answer prompt cannot read a Russian passage it retrieved. Two cheap signals
+    instead of a language-ID dependency: the share of letters that are ASCII
+    (catches Cyrillic, Devanagari, CJK) and the share of English function words
+    (catches other Latin-script languages). A bilingual paper with English
+    abstracts and Russian body text fails the first — measured: 0.34 Latin.
+    """
+    letters = _LETTER.findall(text)
+    if not letters:
+        return True, ""
+    latin = sum(ch.isascii() for ch in letters) / len(letters)
+    words = _LATIN_WORD.findall(text.lower())
+    english = sum(w in _ENGLISH_STOPWORDS for w in words) / max(1, len(words))
+    if latin < settings.INGEST_MIN_LATIN_SHARE:
+        return False, f"not English — only {latin:.0%} of letters are Latin script"
+    if english < settings.INGEST_MIN_ENGLISH_STOPWORDS:
+        return False, f"not English — English function words are {english:.0%} of words"
+    return True, ""
+
+
 def process_file(path: Path, manifest: Manifest, dim: int, force: bool, dry_run: bool) -> FileRecord:
     filename = path.name
     record = FileRecord(filename=filename, file_hash="")
@@ -133,6 +169,19 @@ def process_file(path: Path, manifest: Manifest, dim: int, force: bool, dry_run:
             return record
 
         record.content_hash = document.content_hash()
+
+        # ── language gate ─────────────────────────────────────────────────────
+        # Before dedup and chunking, so a non-English file spends nothing — and
+        # any vectors a previous run indexed under this name are removed.
+        if settings.INGEST_ENGLISH_ONLY:
+            english, reason = _english_check(" ".join(p.text for p in document.pages))
+            if not english:
+                record.status = "skipped"
+                record.error = reason
+                logfire.info("Skipping {filename}: {reason}", filename=filename, reason=reason)
+                if not dry_run:
+                    delete_by_source(filename)
+                return record
 
         # ── content-level dedup ───────────────────────────────────────────────
         # Two files can differ as bytes yet extract to identical text (re-saved
@@ -419,7 +468,7 @@ def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None)
     print("\n" + "=" * 66)
     print(f" Ingestion complete in {elapsed:.1f}s")
     print(f"   indexed: {len(ok)}   failed: {len(failed)}   "
-          f"duplicates: {len(duplicates)}   unsupported: {len(skipped)}")
+          f"duplicates: {len(duplicates)}   skipped: {len(skipped)}")
     print(f"   chunks:  {sum(r.chunks for r in ok)}   points: {sum(r.points for r in ok)}")
 
     if duplicates:
@@ -433,6 +482,11 @@ def run(target: Path, wipe: bool, force: bool, dry_run: bool, limit: int | None)
             print(f"   embedding cache: {cache.get('rows', 0)} vectors stored, "
                   f"{cache.get('hits', 0)} hits this run")
         print(f"   qdrant: {collection_stats()}")
+
+    if skipped:
+        print("\n Skipped (unsupported type or not English — nothing indexed):")
+        for record in skipped:
+            print(f"   - {record.filename}: {record.error}")
 
     if failed:
         print("\n Failed files:")

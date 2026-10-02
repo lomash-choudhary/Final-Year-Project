@@ -26,7 +26,8 @@ from app.llm import AllTargetsFailed, router
 
 _PROMPT = """You are the planning step of a cattle and buffalo health assistant. Its knowledge base \
 is a corpus of peer-reviewed papers on bovine disease (haemoprotozoal diseases, brucellosis, lumpy \
-skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health).
+skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health, mastitis, \
+lameness, respiratory disease, antimicrobial treatment).
 
 CONVERSATION SO FAR:
 {history}
@@ -50,8 +51,10 @@ Then write a self-contained search query for the knowledge base:
 - Use plain descriptive terms a veterinary paper would use.
 - Write it as natural language, NOT as a boolean expression. Do not use AND, OR, quotes or brackets \
 — the search is semantic, so operators only add noise.
-- For SYMPTOM, describe the clinical signs rather than repeating the farmer's phrasing. Example: \
-"my cow won't eat and seems weak" becomes "cattle anorexia loss of appetite weakness causes".
+- For SYMPTOM, name the signs in veterinary terms AND keep what the farmer is asking for \
+(what to apply, what to give, what to feed, whether to call a vet). Example: "my cow's udder is \
+swollen and the milk has clots, what medicine should I give?" becomes "swollen udder clots in milk \
+clinical mastitis dairy cow which medicine or treatment to give".
 - Do not invent details that were never mentioned.
 
 Reply in exactly this format and nothing else:
