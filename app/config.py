@@ -172,6 +172,12 @@ class Settings:
     # Farmers get plain advice; researchers get [n] citations. Turning this on
     # puts citation markers into consumer answers too.
     SHOW_CITATIONS_IN_ADVICE: bool = field(default_factory=lambda: _bool("SHOW_CITATIONS_IN_ADVICE", False))
+    # Comma-separated source filenames that are historical texts (the 1900s
+    # veterinary notes book). The advisor labels their passages as old so their
+    # remedies (carbolic acid, cutting warts off) are never given as medicine.
+    ADVICE_HISTORICAL_SOURCES: str = field(
+        default_factory=lambda: _str("ADVICE_HISTORICAL_SOURCES", "notesondiseaseof00kori.pdf")
+    )
     LLM_CACHE_ENABLED: bool = field(default_factory=lambda: _bool("LLM_CACHE_ENABLED", True))
     LLM_CACHE_TTL: int = field(default_factory=lambda: _int("LLM_CACHE_TTL", 900))
 
@@ -259,6 +265,10 @@ class Settings:
             "clarifier": self.GROQ_CLARIFIER_API_KEY,
             "advisor": self.GROQ_ADVISOR_API_KEY,
         }.get(feature, "")
+
+    @property
+    def historical_sources(self) -> set[str]:
+        return {name.strip() for name in self.ADVICE_HISTORICAL_SOURCES.split(",") if name.strip()}
 
     @property
     def cors_origins(self) -> list[str]:

@@ -194,10 +194,13 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
     run skips the whole corpus.
 16. **Evals hit the live API, not the graph.** What is measured is the system as deployed.
 17. **The advisor names a medicine only when the retrieved passages name it** — never from model
-    memory — and never doses a prescription drug (name only; no prescription notes — the frontend carries
-    the disclaimer). These are **enforced in code after the model** (`advisor._enforce_medicine_rules`:
-    brand → generic, banned/obsolete drugs dropped, the model's own vet notes stripped; jargon like "(topical)"
-    rewritten; Unicode folded first because gpt-oss emits U+2011 hyphens) because the prompt alone did not hold. Red-flag signs force `care_level = vet_now` regardless of what the passages say,
+    memory — and never doses a prescription drug. **No disclaimers or prescription tags of any kind**
+    (owner decision 2026-10-03; disclaimers will be handled separately later). These are **enforced in
+    code after the model** (`advisor._enforce_medicine_rules`: brand → generic, banned/obsolete drugs
+    dropped, doses cut from `_RX`-matched items, the model's own vet/prescription notes stripped, "Give X injection"
+    steps rewritten to "Ask your vet for X", jargon rewritten; Unicode folded first because gpt-oss emits
+    U+2011 hyphens) because the prompt alone did not hold. Passages from `ADVICE_HISTORICAL_SOURCES`
+    reach the model labelled `[OLD BOOK]` and may only supply hygiene steps. Red-flag signs force `care_level = vet_now` regardless of what the passages say,
     and a `vet_now` answer collapses to "Contact a vet now" + at most two safe steps. Default on a missing/unparsable
     care level is the conservative `vet_soon`.
 18. **Farmer answers carry no citation markers and no sources panel** (`main.py` suppresses

@@ -29,9 +29,11 @@ model reasoning over veterinary text is not a diagnostic instrument.
 Medicines are named **only when the reference material names them** for the
 problem at hand — the corpus, not the model's memory, is the source. Antibiotics,
 injectables and other prescription drugs are named but never dosed. No
-prescription notes are added to the answer — the frontend carries the
-disclaimer (owner decision 2026-10-02). Strengths are given only for farm-level
-remedies (footbath, dressing, spray) and only when the passage states them.
+prescription tags or disclaimers of any kind (owner decision 2026-10-03 — the
+product will handle disclaimers separately); the model's own are stripped.
+Strengths are given only for farm-level remedies (footbath, dressing, spray) and
+only when the passage states them. A step that has the farmer inject or dose a
+prescription drug is rewritten to send them to the vet.
 
 The prompt deliberately has no persona and no disclaimer: every prompt token is
 paid on every farmer turn, and a role-play line ("you are a livestock
@@ -55,7 +57,8 @@ from app.llm import AllTargetsFailed, router
 
 VALID_CARE_LEVELS = ("home_care", "vet_soon", "vet_now", "info")
 
-_PROMPT = """Answer a farmer's question about a sick cow or buffalo, using the passages below.
+_PROMPT = """Answer a farmer's question about their cow or buffalo using only the passages below. \
+The farmer may not read well: short sentences, everyday words, no medical terms.
 
 PASSAGES:
 {context}
@@ -73,36 +76,38 @@ over 12 hours, convulsions, suspected poisoning, fast-spreading swelling.
 - otherwise vet_soon if it needs a vet within a day or two, else home_care.
 
 Medicine:
-- Only what the passages name for this problem. Name the exact substance (e.g. "copper sulfate \
-dressing", "oxytetracycline spray"), never a vague "antiseptic". Up to 3 options.
-- Generic names only, never a brand, not even in brackets: Naxcel = ceftiofur, Terramycin = \
-oxytetracycline, Tramisol = levamisole.
-- Only established treatments. Skip products a study was only testing as experimental.
-- Antibiotics, injections and udder tubes: name only, no dose, and never tell the farmer to give them \
-in "What to do". Do not add prescription notes or disclaimers.
+- Only what the passages name for this same problem. A drug they give for a different disease does \
+not count.
+- Exact generic names, up to 3, never brands. Only established treatments, not products a study \
+was only testing.
+- Never a dose for antibiotics, injections, udder tubes, pain killers or tick-fever drugs. No \
+prescription notes or disclaimers.
 - Footbath, dressing, wash or spray: give the strength only if the passages state it.
-- If the question asks what to apply, list what to apply first. If the passages say the problem also \
-needs an injection to cure it, name that too.
-- If the passages name nothing for this problem, write: Ask your vet.
-- Ignore outdated remedies from old texts (arsenic, mercury, turpentine or kerosene drenches, \
-inflating the udder, bleeding).
+- If asked what to apply, list what to apply first.
+- Passages marked [OLD BOOK] are outdated: use them only for cleaning and hygiene, never for \
+medicine or surgery.
+- If nothing fits, write "Ask your vet." under Medicine.
+
+What to do: only steps the passages support, or basic care (shade, water, clean, dry, keep apart). \
+The vet gives prescription medicines and decides doses, never the farmer. No cutting, burning, \
+tubes, or forcing anything into the mouth.
 
 Format. If vet_now, reply only:
-**Contact a vet now.** <one sentence why>
+**Contact a vet now.** <one short reason in plain words>
 **While you wait**
 - <up to 2 safe steps>
 
 Otherwise reply only:
 **Likely cause**
-<one sentence>
+<one short sentence, or "Not clear from your question.">
 **Medicine**
 <one or two lines>
 **What to do**
-- <up to 3 steps, each under 15 words>
+- <up to 3 steps, each under 12 words>
 **Call the vet if**
 - <up to 2 signs>
 
-Plain words: "put on the wound", not "topical"; "injection", not "systemic". Never mention passages, studies, sources, appendices, tables or pages. Under 100 words.
+Never mention passages, studies or pages. Under 100 words.
 Last line, exactly: CARE_LEVEL: <home_care|vet_soon|vet_now>"""
 
 _FALLBACK_ANSWER = (
@@ -124,13 +129,21 @@ def _format_history(messages: list[dict], limit: int = 6) -> str:
 
 
 def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
-    """Unnumbered passages — the model must not cite them, so it must not see labels."""
+    """Unnumbered passages — the model must not cite them, so it must not see labels.
+
+    The one label is [OLD BOOK]: the 1900s notes book is the corpus's only source for
+    some problems, and its remedies (carbolic acid, cutting warts off) were given
+    as current advice until the model could tell its passages apart.
+    """
     blocks: list[str] = []
     used = 0
+    historical = settings.historical_sources
     for doc in documents:
         block = doc.get("content", "")
         if not block.strip():
             continue
+        if doc.get("source") in historical:
+            block = "[OLD BOOK] " + block
         if used + len(block) > budget and blocks:
             break
         blocks.append(block)
@@ -175,17 +188,47 @@ _BRAND_WORD = re.compile(rf"\b(?:{_BRAND_ALT})\b", re.IGNORECASE)
 # Banned in food-producing animals, obsolete, or only experimental in the corpus.
 _DISALLOWED = re.compile(
     r"clenbuterol|chloramphenicol|nitrofur\w*|furazolidone|diethylstilb\w*|phenothiazine|"
-    r"arsenic\w*|mercur\w*|strychnine|turpentine|kerosene|propolis|stem cell",
+    r"arsenic\w*|mercur\w*|strychnine|turpentine|kerosene|propolis|stem cell|"
+    r"carbolic|caustic potash|silver nitrate|cauteri\w*|inflat\w* the udder|udder inflation",
     re.IGNORECASE,
 )
 
-# The model's own "(vet must prescribe)" style notes are removed: the frontend
-# carries the disclaimer.
-_VET_TAG = re.compile(r"\s*[(\[]\s*vet[^)\]]*[)\]]|\s*[-–,]\s*vet must prescribe", re.IGNORECASE)
+# No prescription tags or disclaimers (owner decision 2026-10-03). The model still
+# adds its own ("vet only", "(needs vet's prescription)"), so they are stripped.
+_VET_TAG = re.compile(
+    r"\s*[(\[]\s*(?:needs?\s+|no\s+)?(?:a\s+)?(?:vet|prescription)[^)\]]*[)\]]|\s*[-–,]\s*vet must prescribe",
+    re.IGNORECASE,
+)
+# Antibiotics, pain killers, tick-fever drugs, hormones and anything injected or put
+# up the teat. "sulfa(?!te)" keeps copper sulfate — a footbath — off the list.
+_RX = re.compile(
+    r"\b\w*(?:cillin|mycin|micin|floxacin|cycline|fenicol|sulfa(?!te)|sulpha(?!te)|sulfonamide|"
+    r"ceftiofur|cephalosporin|cefquinome|cephapirin|trimethoprim|tilmicosin|valnemulin|tiamulin|"
+    r"myxin|macrolide|antibiotic|flunixin|meloxicam|ketoprofen|dexamethasone|buparvaquone|diminazene|"
+    r"imidocarb|oxytocin|terbutaline|aminophylline|intramammary|udder tube|injection|injectable|"
+    r"subcutaneous|intramuscular|intravenous)\w*",
+    re.IGNORECASE,
+)
+# A step that has the farmer give the drug themselves. Steps that send them to the
+# vet ("Ask the vet for…") start with other verbs and are left alone.
+_SELF_DOSE = re.compile(
+    r"^(\s*(?:[-•*]|\d+[.)])?\s*)(?:give|administer|inject|start|apply|use|put|insert|infuse|treat|"
+    r"weigh|calculate|repeat|continue|dose)\b",
+    re.IGNORECASE,
+)
 _JARGON = (
     (re.compile(r"\(\W*topical[^)]*\)", re.IGNORECASE), "(put on the wound)"),
-    (re.compile(r"\bsystemic\W+(?=injection)", re.IGNORECASE), ""),
+    (re.compile(r"\bsystemic\W+(?=injection|antibiotic)", re.IGNORECASE), ""),
     (re.compile(r"\(\W*systemic\W*\)", re.IGNORECASE), "(injection)"),
+    (re.compile(r"\btopical(?:ly)?\b\s*", re.IGNORECASE), ""),
+    (re.compile(r"\blesions\b", re.IGNORECASE), "sores"),
+    (re.compile(r"\blesion\b", re.IGNORECASE), "sore"),
+    (re.compile(r"\bdebris\b", re.IGNORECASE), "dirt"),
+    (re.compile(r"\banthelmintics?\b", re.IGNORECASE), "worm medicine"),
+    (re.compile(r"\b(?:becomes?\s+)?non-weight-bearing\b", re.IGNORECASE), "will not stand on the foot"),
+    (re.compile(r"\bha?ematuria\b", re.IGNORECASE), "red urine"),
+    (re.compile(r"\binterdigital\b", re.IGNORECASE), "between the claws"),
+    (re.compile(r"\bNSAIDs?\b"), "pain-relief medicine"),
 )
 
 
@@ -209,28 +252,55 @@ def _clean_brands(text: str) -> str:
 def _plain(text: str) -> str:
     for pattern, replacement in _JARGON:
         text = pattern.sub(replacement, text)
-    return text
+    # "Lesions spread" → "sores spread": re-capitalise a bullet the swap lowered.
+    return re.sub(r"(?m)^(\s*[-•*]\s*)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+
+
+# One item per medicine, so a dose is cut from the prescription drug alone: "copper
+# sulfate 3-5 % or oxytetracycline 5 g/L" once lost the oxytetracycline and tagged
+# the footbath. "or IM" stays joined — a route is part of the item before it.
+_ITEM_SPLIT = re.compile(r";|\.\s+|,\s+(?=[A-Za-z])|\s+(?:or|and)\s+(?!(?:IM|SC|IV|SQ)\b)")
 
 
 def _medicine_items(section: list[str]) -> list[str]:
-    """Filter one Medicine section: drop disallowed drugs and the model's vet notes."""
+    """Filter one Medicine section: drop disallowed drugs and the model's notes, undose prescription ones."""
     out: list[str] = []
     for line in section:
         bullet = re.match(r"^\s*(?:[-•*]|\d+[.)])\s*", line)
         prefix = bullet.group(0) if bullet else ""
         items = []
-        for item in line[len(prefix):].split(";"):
-            item = _VET_TAG.sub("", item).strip(" .")
+        for item in _ITEM_SPLIT.split(_VET_TAG.sub("", line[len(prefix):])):
+            item = item.strip(" .,")
             if not item or _DISALLOWED.search(item) or item.lower().startswith("ask your vet"):
                 continue
+            if _RX.search(item):
+                # No dose for a prescription drug: everything from the first number on
+                # ("6.6-11 mg per kg IM daily") is the vet's decision.
+                item = re.split(r"\s*[\d≈~]", item, maxsplit=1)[0].strip(" ,.-:")
             items.append(item)
         if items:
             out.append(prefix + "; ".join(items))
     return out
 
 
+def _vet_step(line: str) -> str:
+    """Turn "Give ceftiofur injection daily" into a step that sends the farmer to the vet."""
+    match = _SELF_DOSE.match(line)
+    if not match:
+        return line
+    drug = _RX.search(line)
+    if drug:
+        name = drug.group(0).lower()
+        if name.startswith(("inject", "antibiotic", "intramammary", "udder tube")):
+            return match.group(1) + "Ask your vet to give the medicine."
+        return match.group(1) + f"Ask your vet for {name} and use it as the vet says."
+    if re.search(r"\bdos(?:e|age|ing)\b", line, re.IGNORECASE):
+        return match.group(1) + "Ask your vet for the right dose."
+    return line
+
+
 def _enforce_medicine_rules(answer: str) -> str:
-    """Generic names, plain words, no disallowed drugs in **Medicine**."""
+    """Generic names, plain words, no doses or tags on prescription drugs, no disallowed drugs, no self-dosing."""
     out: list[str] = []
     section: list[str] | None = None  # collecting the Medicine section's lines
 
@@ -250,7 +320,9 @@ def _enforce_medicine_rules(answer: str) -> str:
                 section.append(line)
         elif not _DISALLOWED.search(line):
             # Outside the medicine list a disallowed name can only be an instruction to use it.
-            out.append(line)
+            line = _vet_step(line)
+            if not line.strip() or line not in out:  # rewritten steps can collapse to one sentence
+                out.append(line)
 
     if section is not None:
         flush()

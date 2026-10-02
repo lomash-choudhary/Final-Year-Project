@@ -46,6 +46,18 @@ def retrieve_node(state: AgentState) -> dict:
 
     with logfire.span("Retrieval", query=query[:120], attempt=attempt):
         candidates = search(query)
+        disease = state.get("likely_disease", "") if attempt == 1 else ""
+        if disease and state.get("intent") == "symptom":
+            # Farmers describe signs; treatment passages are written under the disease
+            # name. "calf cough runny nose" alone found only decongestant passages, while
+            # leading the query with a guessed disease turned round bald patches into
+            # lumpy skin disease. Searching both, then reranking the union, keeps the
+            # sign matches when the guess is wrong.
+            seen = {(c.source, c.chunk_index) for c in candidates}
+            candidates += [
+                c for c in search(f"{disease} treatment") if (c.source, c.chunk_index) not in seen
+            ]
+            query = f"{query} {disease}"
 
         if not candidates:
             logfire.warning("No candidates returned for query", query=query[:120])

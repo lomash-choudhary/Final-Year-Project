@@ -3,7 +3,7 @@
 Durable project context that is **not** derivable from the code: current state, settled decisions,
 and open threads. Working instructions live in [AGENTS.md](AGENTS.md).
 
-Last reviewed: 2026-10-02.
+Last reviewed: 2026-10-03.
 
 **Every session must update this file before it ends** — protocol in AGENTS.md §12.
 
@@ -68,8 +68,11 @@ Last reviewed: 2026-10-02.
 - **Safety posture of the farmer path is deliberately conservative**: red-flag signs force
   `vet_now` (answer collapses to "Contact a vet now" + ≤2 safe steps), and an unparsable care level
   defaults to `vet_soon`. **Changed 2026-10-02 (owner request):** the advisor now names medicines,
-  but only ones the retrieved passages name, and prescription drugs get no dose ("vet must
-  prescribe"). Answers are capped at ~100 words in four sections (Likely cause / Medicine / What to
+  but only ones the retrieved passages name, and prescription drugs get no dose. **Changed again
+  2026-10-03:** **no disclaimers or prescription tags of any kind in answers** — owner will handle
+  disclaimers separately later; do not add them back. The model's own notes are stripped in code;
+  doses are still cut and "give X injection" steps still rewritten to "ask your vet". Audience is farmers with little
+  schooling: plain words, no jargon. Prompts must stay concise and contain no tables (owner rule). Answers are capped at ~100 words in four sections (Likely cause / Medicine / What to
   do / Call the vet if); the owner wants short, on-point answers. A false "see a vet" costs a consultation fee; a false "treat at home"
   can cost the animal.
 
@@ -132,6 +135,14 @@ Last reviewed: 2026-10-02.
   cannot initialise. Check `GET /health` → `guardrails.nemo_tier` to see what is actually live.
 - **RAGAS runs take 10–15 minutes** by design (TPM pacing). Budget for it before a demo; the
   zero-cost metrics are instant.
+- **Corpus gaps the advisor cannot fix** (2026-10-03): foot rot topical = only the digital-dermatitis
+  oxytetracycline gauze (aabp_1998 p5) is retrieved, so the hoof answer uses it; teat warts = only
+  tarantula-extract study → "Ask your vet"; milk fever and FMD vaccine have no modern treatment →
+  "Ask your vet"; shed cleaning gets generic steps (kori copper-sulphate passage rarely retrieved).
+  `questions.md` expects levamisole for warts — the corpus does not support that.
+- **Translation runs on `qwen/qwen3.8-27b` (fast tier)**; Hindi wording is the weakest part (a farm
+  glossary in the prompt fixed "bachhde" → "child" and mastitis → "मामा"). Moving `translate_out` to
+  the quality tier is the next lever if quality matters more than 120B quota.
 - **No automated tests and no CI.** Worth adding if the project continues past submission —
   guardrail regexes and the `_parse` helpers are the highest-value targets.
 
@@ -188,3 +199,25 @@ One dated line per session, newest last: what was done, what is left.
   the model's own vet tags are stripped. No doses for prescription drugs is unchanged.
 
 - 2026-10-02 — Q&A only: explained the INGEST_ENGLISH_ONLY language gate to the owner. No code change.
+
+- 2026-10-02 — Reviewed a farmer foot-rot answer against DATA/: diagnosis right, topical drugs taken
+  from the digital-dermatitis section, jargon, self-injection advice. Logged as open thread; no code change.
+- 2026-10-03 — Live-tested all 28 `questions.md` + 5 edge cases (clarify, greeting, off-topic,
+  jailbreak, dose request) via POST /query, 4 rounds. Fixed: planner routed practical farmer
+  questions to RESEARCH (shed cleaning, FMD vaccine got tables) and a first-turn Hinglish question to
+  CONVERSATIONAL (refusal); planner now returns DISEASE and the retriever unions a "<disease>
+  treatment" search (calf cough → tilmicosin/tulathromycin); advisor: canonical prescription tag, dose
+  stripping, "give X injection" → "ask your vet", [OLD BOOK] label (`ADVICE_HISTORICAL_SOURCES`),
+  established treatments only, more jargon rewrites; Hinglish answers forced to Latin script;
+  translator farm glossary; farmer-friendly guardrail replies; gpt-oss "【1†L1】" citations → [n] in
+  responder. Final run: all 33 acceptable. Left: commit; evals/guardrails_eval not re-run; Hindi quality.
+- 2026-10-03 — Owner asked if the prescription tag comes from DATA/: it does not, `advisor._RX` adds it
+  to every antibiotic. Corpus: 1982 AABP lists oxytetracycline as non-Rx (US, 1982); aabp_1998 p6 says
+  tetracyclines are extra-label in dairy cattle and its appendix says consult a vet.
+- 2026-10-03 — Owner: remove the prescription tag, no disclaimers at all for now. Removed `RX_TAG`,
+  the prompt line and translator line; AGENTS.md #17 updated. Live-checked Q1/7/28: no tags, no doses.
+- 2026-10-03 — Discussed a 30-query farmer eval (10 medicine / 10 vet-now / 10 mixed): deterministic
+  checks first (care level, medicine recall, unsupported drugs, doses, format, language), judge optional.
+  Blocker noted: /query hides sources for symptom intent, so evals need a debug flag. No code change.
+- 2026-10-03 — Eval metrics agreed in discussion: judge-based Correctness + Helpfulness, deterministic
+  source recall, safety gates (care level, dose) in code. No code change.

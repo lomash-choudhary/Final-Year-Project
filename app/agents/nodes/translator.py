@@ -57,7 +57,7 @@ _HINGLISH_MARKERS = re.compile(
 
 _LANGUAGE_NAMES = {
     "hi": "Hindi (Devanagari script)",
-    "hi-latn": "Hindi written in Roman/English letters (Hinglish)",
+    "hi-latn": "Hinglish: Hindi written ONLY in English (Latin) letters, never Devanagari",
 }
 
 
@@ -90,6 +90,8 @@ TEXT:
 Rules:
 - Output ONLY the English translation. No notes, no explanation, no quotes.
 - Keep the meaning exact. Do not add advice, detail, or interpretation.
+- The writer keeps cattle or buffalo: bachhda/bachhde = calf, gaay = cow, bhains = buffalo, \
+thann = udder, khur = hoof.
 - Keep animal, disease and medicine names recognisable.
 - If the text is already English, return it unchanged."""
 
@@ -102,6 +104,8 @@ Rules:
 - Output ONLY the translation. No notes, no explanation, no preamble.
 - Keep all Markdown formatting exactly as it is: **bold**, bullet points, line breaks, headings.
 - Use everyday spoken language a village farmer would understand, not formal or literary vocabulary.
+- Use farmers' own words: calf = bachhda, udder = thann, hoof = khur, claws = khur ke do hisse, \
+swelling = sujan, foot rot = khur ki sadan, mastitis = thanaila, dung = gobar.
 - Keep medicine names, dosages and numbers exactly as written in the English text.
 - Do not add or remove any advice."""
 
@@ -164,6 +168,17 @@ def translate_out_node(state: AgentState) -> dict:
                 feature="translate",
             )
             translated = response.content.strip()
+            if language == "hi-latn" and _DEVANAGARI.search(translated):
+                # The model drifts into Devanagari for Hinglish readers about one time in
+                # four; someone who typed in Roman letters may not read that script.
+                response = router.invoke(
+                    _FROM_ENGLISH_PROMPT.format(language=_LANGUAGE_NAMES[language], text=answer)
+                    + "\n- Your last reply used Devanagari. Use only English letters.",
+                    tier="fast",
+                    temperature=0.0,
+                    feature="translate",
+                )
+                translated = response.content.strip()
         except AllTargetsFailed as exc:
             logfire.warning("Answer translation failed ({err}) — returning English", err=str(exc)[:200])
             return {"plan": state.get("plan", []) + ["Answer translation unavailable — returned in English"]}

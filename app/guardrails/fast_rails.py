@@ -35,37 +35,35 @@ PASS = GuardResult(fired=False)
 
 
 DOMAIN_BLURB = (
-    "I'm a veterinary research assistant for cattle and buffalo health. My knowledge base is a "
-    "collection of peer-reviewed papers covering haemoprotozoal diseases (theileriosis, babesiosis, "
-    "anaplasmosis), brucellosis, lumpy skin disease, foot and eye disorders, genetic disorders, "
-    "E. coli, and dairy-herd health management."
+    "I help with cow and buffalo health: sickness, wounds, udder and milk problems, feet, fever, "
+    "worms and ticks. Researchers can also ask about the studies behind the advice."
 )
 
 RESPONSES = {
     "greeting": (
         "Hello! " + DOMAIN_BLURB + "\n\n"
-        "Try asking something like: *What is the reported prevalence of theileriosis in Indian cattle?*"
+        "Tell me what is wrong with your animal. For example: *My cow's udder is swollen. What should I do?*"
     ),
-    "farewell": "Goodbye! Come back any time you need to dig into the bovine disease literature.",
+    "farewell": "Goodbye! Come back any time your animals need help.",
     "capabilities": (
         DOMAIN_BLURB + "\n\n**I can help you:**\n"
-        "- Look up disease prevalence, incidence and seasonality figures\n"
-        "- Compare findings across studies and regions\n"
-        "- Summarise diagnostic methods, risk factors and economic impact\n"
-        "- Trace every claim back to the source paper and page\n\n"
-        "Every answer is grounded in the indexed papers — I will tell you when the corpus does not cover something."
+        "- Understand what may be wrong with your cow or buffalo\n"
+        "- Know which medicine is used, and when to call the vet\n"
+        "- Prevent disease in your herd\n"
+        "- For researchers: find figures and findings, with the paper and page\n\n"
+        "I only use my reference papers, and I will tell you when they do not cover something."
     ),
     "off_topic": (
         "That falls outside my knowledge base. " + DOMAIN_BLURB + "\n\n"
-        "Ask me anything about cattle or buffalo disease research and I'll pull it from the papers."
+        "Ask me anything about your cattle or buffalo."
     ),
     "jailbreak": (
         "My instructions do not change based on how a request is phrased. I answer questions about "
-        "cattle and buffalo disease research using the indexed literature. What would you like to know?"
+        "cow and buffalo health. What is the problem with your animal?"
     ),
     "injection": (
         "That request looks like an attempt to override my instructions or extract my configuration, "
-        "so I won't act on it. I'm happy to answer questions about the bovine disease literature."
+        "so I won't act on it. I'm happy to help with your cattle or buffalo."
     ),
 }
 

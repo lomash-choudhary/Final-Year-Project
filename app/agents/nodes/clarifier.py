@@ -56,7 +56,8 @@ or which of two clearly different treatments applies.
 
 Always answer NO when:
 - the problem is specific enough to advise on (e.g. "limping with a wound between the hooves", \
-"swollen udder with clots in the milk", "calf with diarrhoea")
+"swollen udder with clots in the milk", "calf with diarrhoea", "round bald patches on the skin")
+- the farmer asks what medicine or treatment to use for a sign they named
 - the signs are already serious enough to need a vet regardless of the answers
 - the question is general knowledge rather than about one sick animal
 - the farmer has already given the key details

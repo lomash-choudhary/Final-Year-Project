@@ -88,6 +88,7 @@ Changing any of these requires a `--wipe` re-ingest to take effect on existing d
 | `GUARDRAILS_MODE` | `fast` | `off` / `fast` / `full`. See [08](08_GUARDRAILS.md) |
 | `LLM_CACHE_ENABLED` | `true` | In-process response cache |
 | `LLM_CACHE_TTL` | `900` | Seconds |
+| `ADVICE_HISTORICAL_SOURCES` | `notesondiseaseof00kori.pdf` | Comma-separated source files that are historical texts. The farmer advisor sees their passages labelled `[OLD BOOK]` and uses them for hygiene only, never for medicine |
 
 ---
 

@@ -22,6 +22,7 @@ class AgentState(TypedDict, total=False):
     query_en: str            # English version — everything downstream uses this
     search_query: str        # planner's rewrite — standalone, history-resolved
     intent: str              # "conversational" | "symptom" | "research"
+    likely_disease: str      # planner's guess for a symptom turn, "" if none — a second search
 
     # Language handling. Detected once per turn from the raw input.
     #   "en"      plain English

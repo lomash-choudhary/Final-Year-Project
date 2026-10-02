@@ -17,11 +17,23 @@ the model will happily complete.
 
 from __future__ import annotations
 
+import re
+
 import logfire
 
 from app.agents.state import AgentState
 from app.config import settings
 from app.llm import AllTargetsFailed, router
+
+# gpt-oss writes its own citation syntax, "【1†L1-L3】", beside or instead of [1].
+# The UI links [n] to the sources panel; the native form is unreadable noise.
+_NATIVE_CITATION = re.compile(r"\s*【(\d+)[^】]*】")
+
+
+def _normalise_citations(text: str) -> str:
+    text = _NATIVE_CITATION.sub(r" [\1]", text)
+    return re.sub(r"(\[\d+\])(?:\s*\1)+", r"\1", text)  # "[1] [1]" → "[1]"
+
 
 _RESEARCH_PROMPT = """You are a veterinary research assistant. You answer strictly from the \
 peer-reviewed passages provided below — never from prior knowledge.
@@ -159,11 +171,12 @@ def generate_node(state: AgentState) -> dict:
         else:
             plan.append(f"Responder: answered by {response.target_label} ({response.model})")
 
+        answer = _normalise_citations(response.content)
         return {
-            "final_answer": response.content,
+            "final_answer": answer,
             "status": "Answer generated",
             "plan": state.get("plan", []) + plan,
-            "messages": [{"role": "assistant", "content": response.content}],
+            "messages": [{"role": "assistant", "content": answer}],
             "llm_meta": {
                 "target": response.target_label,
                 "model": response.model,

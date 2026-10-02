@@ -11,9 +11,17 @@ Runs on the **fast tier** (8B). Two jobs in one call.
 ### 1. Intent classification
 
 `CONVERSATIONAL` — small talk, thanks, or a question answerable from the conversation alone.
-`RESEARCH` — needs evidence from the papers.
+`SYMPTOM` — any practical question from someone who keeps animals: a sick animal, or what to give,
+apply, clean or vaccinate with. Goes to the clarifier and the farmer advisor.
+`RESEARCH` — a question about the studies themselves (prevalence, findings, methods).
 
-Getting this right saves a vector search and an LLM call on every "thanks, that helps".
+Getting this right saves a vector search and an LLM call on every "thanks, that helps". Two
+corrections live in `_parse`: a first message can never be `CONVERSATIONAL` (there is nothing to
+answer from — "bachhde ko khansi hai" once came back as a refusal), and "how do I clean my shed"
+is `SYMPTOM`, not `RESEARCH` — it used to get a cited research answer with a table.
+
+For `SYMPTOM` the planner also returns `DISEASE:` — its single best guess, stored as
+`likely_disease` and shown in the plan as `Likely disease: …`.
 
 ### 2. Query rewriting
 
@@ -50,6 +58,13 @@ right chunk sitting at position 14; the narrow pass is what keeps the LLM's cont
 to stay grounded. See [07_RERANKING.md](07_RERANKING.md).
 
 Re-entered on a self-correction loop, so it labels its plan entries with a pass number.
+
+On the first pass of a `SYMPTOM` turn with a `likely_disease`, it runs a second search for
+`"<disease> treatment"`, merges the candidates and reranks the union against query + disease.
+Farmers describe signs while treatment passages are written under the disease name ("calf cough
+runny nose" alone found only decongestant passages; adding "pneumonia" found tilmicosin and
+tulathromycin). Putting the guess *into* the main query was worse: round bald patches became
+lumpy skin disease. The union keeps the sign matches when the guess is wrong.
 
 ---
 
