@@ -54,6 +54,14 @@ def check_config() -> int:
         "set (second free quota)" if settings.GROQ_FALLBACK_API_KEY else "missing — no key-level failover",
     )
     line(OK if settings.GEMINI_API_KEY else FAIL, "GEMINI_API_KEY", "set" if settings.GEMINI_API_KEY else "missing")
+    gemini_fb = settings.GEMINI_FALLBACK_API_KEY
+    line(
+        OK if gemini_fb and gemini_fb != settings.GEMINI_API_KEY else WARN,
+        "GEMINI_FALLBACK_API_KEY",
+        "set (embedding key failover)" if gemini_fb and gemini_fb != settings.GEMINI_API_KEY
+        else "same as GEMINI_API_KEY — ignored" if gemini_fb
+        else "missing — no embedding key failover",
+    )
     line(
         OK if settings.LOGFIRE_TOKEN else WARN,
         "LOGFIRE_TOKEN",
@@ -137,6 +145,33 @@ def check_qdrant() -> int:
         return 1
 
 
+def check_memory() -> int:
+    """Conversation memory is optional: no DATABASE_URL degrades to RAM, never blocks."""
+    print("\nConversation memory")
+    if not settings.DATABASE_URL:
+        line(WARN, "backend", "in-process only — set DATABASE_URL to persist chats and show history")
+        return 0
+    try:
+        from app.memory import store
+
+        status = store.status()
+        if status.get("status") == "error":
+            line(WARN, "postgres", status.get("error", "")[:90])
+            return 0
+        line(
+            OK, "postgres",
+            f"schema rag: {status.get('conversations', 0)} conversations, {status.get('messages', 0)} messages",
+        )
+        line(
+            OK, "policy",
+            f"window {settings.MEMORY_WINDOW_TURNS} turns · summary ≤{settings.MEMORY_SUMMARY_MAX_CHARS} chars"
+            f" · retention {settings.MEMORY_RETENTION_DAYS}d",
+        )
+    except Exception as exc:
+        line(WARN, "postgres", str(exc)[:90])
+    return 0
+
+
 def check_corpus() -> int:
     print("\nCorpus")
     data_dir = Path(settings.DATA_DIR)
@@ -201,7 +236,7 @@ def check_live() -> int:
 
         vector = embedding.embed_query("bovine theileriosis prevalence")
         backend = embedding.get_backend()
-        line(OK, "embeddings", f"{backend.name}/{backend.model} — {len(vector)}-dim")
+        line(OK, "embeddings", f"{backend.name}/{backend.model} — {len(vector)}-dim, {backend.key_label} key")
     except Exception as exc:
         line(FAIL, "embeddings", str(exc)[:110])
         failures += 1
@@ -227,7 +262,7 @@ def main() -> int:
     print("  Bovine Disease RAG — preflight check")
     print("=" * 74)
 
-    failures = check_config() + check_models() + check_qdrant() + check_corpus() + check_parsers()
+    failures = check_config() + check_models() + check_qdrant() + check_memory() + check_corpus() + check_parsers()
     if args.live:
         failures += check_live()
 

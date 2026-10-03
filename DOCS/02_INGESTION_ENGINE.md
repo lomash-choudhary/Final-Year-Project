@@ -33,6 +33,14 @@ Pages still empty after all three tiers are reported, not silently dropped:
 
 That is information you need: it tells you a section of your corpus is invisible to retrieval.
 
+A page can also come back **non-empty but wrong**. On some OCR'd scans (the archive.org book
+`notesondiseaseof00kori.pdf`) pypdf drops every inter-word space —
+`Saturateoakumorcottonwiththeabove…` — and the whole page arrives as one giant token, which embeds
+as noise. Each pypdf page is scored by the share of its characters inside tokens longer than 25
+characters; above `0.5` it is re-extracted with PyMuPDF, which reads the same text layer with
+correct spacing, and the better result is kept **in the same page slot**. On this corpus
+reference-heavy pages (URLs, DOIs) peak near 0.3 and glued pages score 0.94–1.0.
+
 ### Other formats
 
 | Format | Loader | Page granularity |
@@ -49,12 +57,13 @@ Python, have no system dependencies, and do not break on a fresh install.
 
 ## Cleaning (`app/ingestion/cleaning.py`)
 
-Four defects, each of which poisons retrieval in a specific way:
+Five defects, each of which poisons retrieval in a specific way:
 
 | Defect | Example | Effect if untreated |
 |---|---|---|
 | Ligatures | `beneﬁt`, `ﬁeld` | A query for "benefit" never matches |
 | Hyphenation across lines | `haemo-\nprotozoa` | The key term is split in half |
+| Soft hyphens (U+00AD) | `bacte\xad ria` in the AABP proceedings scans | Same split, and NFKC does not fold it |
 | Soft wrapping | newline every ~80 chars | Sentence boundaries are destroyed, so the chunker splits mid-sentence |
 | Running heads | journal name + page number on all 124 pages | Dominates chunk text and drags every embedding toward the same meaningless centroid |
 
@@ -62,6 +71,25 @@ Ligatures are handled by Unicode NFKC normalisation. Running heads are found sta
 short line whose digits are masked (`p. 4` and `p. 5` collapse to `p. #`) and which appears on
 ≥60% of pages is boilerplate. That threshold only applies to documents of 5+ pages — on a 3-page
 paper, a line appearing twice is far more likely to be real content.
+
+---
+
+## English-only gate (`processor._english_check`)
+
+After cleaning and before dedup or chunking, each document is checked for language. Everything
+between `translate_in` and `translate_out` is English, so a retrieved Russian passage is noise the
+answer prompt cannot read. Two cheap signals, no language-ID dependency:
+
+| Signal | Threshold | Catches |
+|---|---|---|
+| Share of letters in Latin script | `INGEST_MIN_LATIN_SHARE` = 0.9 | Cyrillic, Devanagari, CJK |
+| Share of words that are English function words (`the`, `of`, `and`…) | `INGEST_MIN_ENGLISH_STOPWORDS` = 0.12 | Spanish, French, other Latin-script languages |
+
+English papers in this corpus measure 1.00 / 0.21–0.33; the Russian mastitis paper `11.pdf`
+(English abstract, Russian body) measured 0.35 Latin. A rejected file is marked `skipped`, spends
+no quota, and any points a previous run indexed under its name are deleted. Unchanged files are
+skipped before they are read, so re-checking already-indexed files needs `--force`.
+`INGEST_ENGLISH_ONLY=false` turns the gate off.
 
 ---
 

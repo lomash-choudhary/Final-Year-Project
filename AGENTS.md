@@ -14,16 +14,17 @@ checkouts of these same files, not separate sources.)
 
 ## 1. What this project is
 
-**Bovine Disease Research Assistant** — an agentic RAG system over 16 peer-reviewed papers on
+**Bovine Disease Research Assistant** — an agentic RAG system over 44 indexed English veterinary PDFs on
 cattle and buffalo disease (haemoprotozoal infections, brucellosis, lumpy skin disease, foot and
-eye disorders, genetic disorders, *E. coli*, dairy-herd health).
+eye disorders, genetic disorders, *E. coli*, dairy-herd health, mastitis, lameness, respiratory
+disease, antimicrobial use and resistance).
 
 It serves **two audiences through one LangGraph graph**:
 
 | Audience | Example input | Path | Output shape |
 |---|---|---|---|
 | Researcher | "prevalence of theileriosis in India" | planner → retriever → grader → **responder** | grounded prose with inline `[n]` citations + page-accurate sources |
-| Farmer | "meri gaay khana nahi kha rahi" | planner → clarifier → retriever → grader → **advisor** | plain-language *What this looks like / What to do now / Watch for* + `care_level` badge |
+| Farmer | "meri gaay khana nahi kha rahi" | planner → clarifier → retriever → grader → **advisor** | short *Likely cause / Medicine / What to do / Call the vet if* (or *Contact a vet now*) + `care_level` badge |
 
 Hard constraint that explains most design decisions: **everything must run on free tiers.**
 Gemini for embeddings, Groq for reasoning (multiple keys chained), Qdrant local/free-cloud,
@@ -39,11 +40,12 @@ English only**.
 
 ```text
 app/
-├── main.py                       FastAPI: /query /health /sources /stats /graph /graph/mermaid
+├── main.py                       FastAPI: /query /conversations /health /sources /stats /graph /graph/mermaid
 ├── config.py                     EVERY tunable. The only place os.getenv() is allowed.
 ├── observability.py              Logfire + LangSmith bootstrap (must run before other imports)
 ├── agents/
-│   ├── graph.py                  LangGraph wiring, routers, MemorySaver checkpointer
+│   ├── graph.py                  LangGraph wiring, routers (no checkpointer — memory is app/memory)
+│   ├── history.py                format_history(): summary + recent window, shared by every node
 │   ├── state.py                  AgentState TypedDict + reducer decisions
 │   └── nodes/
 │       ├── translator.py         translate_in / translate_out + free language detection
@@ -58,6 +60,7 @@ app/
 │   ├── colang_rules.py           NeMo Colang intents (optional tier)
 │   └── rails.py                  tier orchestration + graceful degradation
 ├── llm/router.py                 LLM gateway: fallback ladder, retries, TTL response cache
+├── memory/store.py               conversation memory + chat history (Postgres `rag` schema, RAM fallback)
 ├── ingestion/
 │   ├── processor.py              CLI: load → clean → chunk → JSON → embed → index
 │   ├── manifest.py               incremental re-ingestion, resume, dedup bookkeeping
@@ -71,10 +74,12 @@ app/
     └── ranking_service.py        FlashRank cross-encoder singleton
 
 evals/                            golden_dataset.json · pipeline.py · metrics.py · guardrails_eval.py · app.py
+                                  farmer_dataset.json · farmer_eval.py (farmer LLM-as-judge eval)
+reports/                          farmer eval reports, IST-stamped (.html to read and share, .json for data)
 ui/app.py                         Streamlit chat UI
 scripts/doctor.py                 preflight check (no API calls by default)
 DOCS/01..10                       deep-dive docs — 06_KNOWN_GOTCHAS.md is the important one
-DATA/                             the corpus (16 PDFs)
+DATA/                             the corpus (46 PDFs; 44 indexed — 1 duplicate, 1 non-English)
 processed_data/                   generated: parsed+chunked JSON per document (gitignored)
 ingestion_manifest.json           generated: ingestion state (gitignored)
 .cache/embeddings.sqlite3         generated: embedding cache (gitignored)
@@ -117,6 +122,14 @@ python -m evals.pipeline                     # phase 1: replay golden set agains
 python -m evals.metrics                      # phase 2: zero-cost metrics + RAGAS (10-15 min)
 python -m evals.guardrails_eval              # guardrail confusion matrix
 
+# farmer eval — 30 questions (medicine / vet / mixed), LLM-as-judge; needs the API running
+python -m evals.farmer_eval                  # all 30 (~10 min) → reports/farmer_eval_<IST time>_IST.html (shareable) + .json
+python -m evals.farmer_eval --ids m1,v2,x9   # a subset (make eval-farmer runs all)
+python -m evals.farmer_eval --category vet   # medicine | vet | mixed
+python -m evals.farmer_eval --no-judge       # code metrics only: care level, sources, safety gates
+python -m evals.farmer_eval --rejudge reports/<run>.json  # grade what a quota-hit run left ungraded; no app calls
+# Free-tier budget: the judge gets 200k tokens/day per key. Fix first, then run once — never rerun blindly.
+
 # cleanup
 make clean-index                             # rm processed_data/ manifest .cache (Qdrant untouched)
 ```
@@ -129,9 +142,10 @@ and the eval suite. Do not claim tests pass — there are none to run.
 ## 4. The request path
 
 ```
-POST /query
-  └─ guardrails gate (fast regex; blocked path spends ZERO model calls)
-  └─ rag_agent.invoke(state, thread_id)        ← synchronous, deliberately
+POST /query {q, thread_id, user_id}
+  └─ memory.load       summary + last MEMORY_WINDOW_TURNS turns (one Postgres round trip)
+  └─ guardrails gate (fast regex; blocked path spends ZERO model calls — still saved to history)
+  └─ rag_agent.invoke(state seeded with memory)  ← synchronous, deliberately
        translate_in    detect language; translate to English only if not English
        planner         intent + standalone search query        (fast tier)
        ├─ conversational → responder
@@ -141,6 +155,7 @@ POST /query
        grader          cheap signals first; LLM only in the ambiguous band; may loop back once
        responder/advisor
        translate_out   translate answer + follow-ups back to the user's language
+  └─ memory.save       turn persisted (one statement); summary + retention run as background tasks
   └─ QueryResponse: answer, thought_process, sources, llm meta, language, care_level,
                     follow_up_questions, awaiting_answer
 ```
@@ -163,9 +178,13 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
    `main.py`, `processor.py`, `doctor.py`, `ui/app.py` mark a deliberate ordering constraint.
 3. **The graph is invoked synchronously** (`invoke`, not `ainvoke`). LangGraph's async path runs
    nodes in a different context and detaches the Logfire span tree.
-4. **`messages` is a reducer (`operator.add`); `plan` is not.** MemorySaver persists per
-   `thread_id`, so an accumulating plan would replay every earlier turn's reasoning. Nodes
-   concatenate explicitly: `state.get("plan", []) + [...]`. The planner resets it.
+4. **Conversation memory is bounded and lives in Postgres, not in the graph.** The graph has no
+   checkpointer; `main.py` loads `summary + last MEMORY_WINDOW_TURNS turns` from
+   `app/memory/store.py`, seeds `messages`/`memory_summary`, and saves the turn afterwards. Never
+   feed retrieved passages or the plan back into memory, never load the full history into a prompt,
+   and keep summarising/retention in background tasks. `messages` is a reducer (`operator.add`);
+   `plan` is not — it is one turn's reasoning. Nodes concatenate explicitly:
+   `state.get("plan", []) + [...]`; `translate_in` resets it.
 5. **Vector dimension is probed, never hardcoded**, and the embedding backend is **locked after
    init**. Mid-run switching from 3072-dim Gemini to 768-dim local would corrupt the collection,
    so it raises instead.
@@ -192,12 +211,21 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
 15. **`--dry-run` must not write the manifest** (`Manifest(..., read_only=True)`), or the next real
     run skips the whole corpus.
 16. **Evals hit the live API, not the graph.** What is measured is the system as deployed.
-17. **The advisor never names a prescription medicine or dose**, and red-flag signs force
-    `care_level = vet_now` regardless of what the passages say. Default on a missing/unparsable
+17. **The advisor names a medicine only when the retrieved passages name it** — never from model
+    memory — and never doses a prescription drug. **No disclaimers or prescription tags of any kind**
+    (owner decision 2026-10-03; disclaimers will be handled separately later). These are **enforced in
+    code after the model** (`advisor._enforce_medicine_rules`: brand → generic, banned/obsolete drugs
+    dropped, doses cut from `_RX`-matched items, the model's own vet/prescription notes stripped, "Give X injection"
+    steps rewritten to "Ask your vet for X", jargon rewritten; Unicode folded first because gpt-oss emits
+    U+2011 hyphens) because the prompt alone did not hold. Passages from `ADVICE_HISTORICAL_SOURCES`
+    reach the model labelled `[OLD BOOK]` and may only supply hygiene steps. Red-flag signs force `care_level = vet_now` regardless of what the passages say — in the
+    prompt and again in code (`advisor._RED_FLAGS` on the English question → fixed "Contact a vet now" answer),
+    and a `vet_now` answer collapses to "Contact a vet now" + at most two safe steps. Default on a missing/unparsable
     care level is the conservative `vet_soon`.
 18. **Farmer answers carry no citation markers and no sources panel** (`main.py` suppresses
-    `sources` when `intent == "symptom"`); the advisor's context is deliberately unnumbered so the
-    model cannot cite. `SHOW_CITATIONS_IN_ADVICE=true` puts them back.
+    `sources` when `intent == "symptom"`, unless the eval-only `include_sources` request field is
+    set); the advisor's context is deliberately unnumbered so the model cannot cite.
+    `SHOW_CITATIONS_IN_ADVICE=true` puts them back.
 19. **No model name is hardcoded anywhere — not even as a fallback.** Every model identifier comes
     from `.env` via `settings` (`GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GROQ_TRANSLATE_MODEL`,
     `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`,
@@ -271,9 +299,9 @@ Everything lives in `.env` (see `.env.example`, documented in `DOCS/05_ENVIRONME
 | Needed | Variable |
 |---|---|
 | Required | `GEMINI_API_KEY` (embeddings), `GROQ_API_KEY` (reasoning), `QDRANT_CLUSTER_ENDPOINT` |
-| Strongly recommended | `GROQ_FALLBACK_API_KEY` (a real second free quota) |
+| Strongly recommended | `GROQ_FALLBACK_API_KEY` (a real second free quota), `GEMINI_FALLBACK_API_KEY` (embedding key failover, different GCP project) |
 | Required (models) | `GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GEMINI_EMBEDDING_MODEL` — nothing is defaulted in code |
-| Optional | `GROQ_TRANSLATE_API_KEY`, `GROQ_CLARIFIER_API_KEY`, `GROQ_ADVISOR_API_KEY`, `QDRANT_API_KEY` (cloud only), `LOGFIRE_TOKEN`, `LANGSMITH_API_KEY`, `JUDGE_GROQ` |
+| Optional | `DATABASE_URL` (conversation memory + chat history; blank = RAM only), `GROQ_TRANSLATE_API_KEY`, `GROQ_CLARIFIER_API_KEY`, `GROQ_ADVISOR_API_KEY`, `QDRANT_API_KEY` (cloud only), `LOGFIRE_TOKEN`, `LANGSMITH_API_KEY`, `JUDGE_GROQ` |
 | Optional (models) | `GROQ_TRANSLATE_MODEL`, `GEMINI_CHAT_MODEL`, `LOCAL_EMBEDDING_MODEL`, `RERANKER_MODEL`, `JUDGE_MODEL`, `EVAL_EMBEDDING_MODEL` |
 | Inert | `PORTKEY_API_KEY`, `ENABLE_PORTKEY` |
 
@@ -303,8 +331,10 @@ against the same Qdrant cluster.**
 | plan strings in nodes | check `evals/pipeline.py:detect_tool` still classifies correctly |
 | a model that has been decommissioned | edit `.env` only — no source change; `python -m scripts.doctor` prints the resolved names |
 | guardrail regexes | run `python -m evals.guardrails_eval` — it reports FP/FN separately |
+| advisor / clarifier / planner prompts or farmer retrieval | run `python -m evals.farmer_eval` and compare with the last report in `reports/` |
 | prompts in nodes | re-check the corresponding `_parse` helper still matches the required format |
 | anything in the graph | `GET /graph/mermaid` renders the compiled shape without network access |
+| memory window / summary / retention | `python -m scripts.doctor` (DB + policy), then a multi-turn chat; check `memory` in the `/query` response |
 
 **Before any real ingestion run**: `python -m scripts.doctor` → `--dry-run` → inspect one
 `processed_data/*.json`. Reading the parsed text is the fastest way to catch a badly-extracted PDF,

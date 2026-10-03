@@ -21,6 +21,7 @@ pydantic>=2.0.0               # request/response validation
 
 # --- AGENT ---
 langgraph                     # the planner -> retriever -> grader -> responder graph
+psycopg[binary,pool]          # conversation memory + chat history (Postgres / Neon)
 langchain-core                # message types used by the LLM router
 
 # --- LLM PROVIDERS (lazy-imported by app/llm/router.py) ---

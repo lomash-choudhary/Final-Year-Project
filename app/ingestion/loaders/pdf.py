@@ -12,6 +12,11 @@ back in their original position, or every downstream page citation is wrong.
                        cannot open at all. Optional import: if PyMuPDF is not
                        installed the tier is skipped with a warning.
 
+A page can also come back *non-empty but wrong*: on some OCR'd scans (archive.org
+books) pypdf drops every inter-word space — "Saturateoakumorcottonwith". That text
+embeds as noise. Such pages are re-extracted with PyMuPDF, which reads the same
+text layer with correct spacing, and the better of the two is kept in place.
+
 Pages that stay empty after all three tiers are almost always scanned images.
 They are reported (not silently dropped) so you know what your corpus is missing.
 """
@@ -23,6 +28,23 @@ from pathlib import Path
 import logfire
 
 from app.ingestion.loaders.base import ExtractionFailed, LoadedDocument, Page
+
+
+def _run_together_ratio(text: str) -> float:
+    """
+    Share of characters sitting inside tokens longer than 25 chars. Weighted by
+    characters, not tokens, because a fully glued page is a single giant token.
+    """
+    tokens = text.split()
+    total = sum(len(t) for t in tokens)
+    if total < 200:
+        return 0.0
+    return sum(len(t) for t in tokens if len(t) > 25) / total
+
+
+# Above this, a page is treated as spacing-corrupted. Measured on this corpus:
+# reference-heavy pages (URLs, DOIs) peak near 0.3; glued pages score 0.94-1.0.
+_RUN_TOGETHER_THRESHOLD = 0.5
 
 
 def _tier1_pypdf(path: Path) -> tuple[dict[int, str], int]:
@@ -117,6 +139,32 @@ def load_pdf(path: Path) -> LoadedDocument:
                     raise ExtractionFailed(
                         f"No PDF engine could open {path.name}. The file is likely corrupt or encrypted."
                     ) from exc
+
+        # ── spacing repair ────────────────────────────────────────────────────
+        glued = [n for n, text in extracted.items() if _run_together_ratio(text) > _RUN_TOGETHER_THRESHOLD]
+        if glued:
+            try:
+                recovered = _tier3_pymupdf(path, glued)
+                fixed = [
+                    n for n, text in recovered.items()
+                    if _run_together_ratio(text) < _run_together_ratio(extracted[n])
+                ]
+                for n in fixed:
+                    extracted[n] = recovered[n]
+                    extractor_of[n] = "pymupdf"
+                logfire.info(
+                    "Re-extracted {fixed}/{glued} run-together pages with PyMuPDF",
+                    fixed=len(fixed), glued=len(glued), filename=path.name,
+                )
+                if len(fixed) < len(glued):
+                    doc.warnings.append(
+                        f"{len(glued) - len(fixed)} page(s) still have run-together words after re-extraction."
+                    )
+            except ImportError:
+                doc.warnings.append(f"{len(glued)} page(s) have run-together words; PyMuPDF not installed to repair them.")
+            except Exception as exc:
+                doc.warnings.append(f"spacing repair failed: {exc}")
+                logfire.warning("Spacing repair (pymupdf) failed: {err}", err=str(exc)[:300])
 
         # ── tier 2 ────────────────────────────────────────────────────────────
         missing = [n for n in range(1, total_pages + 1) if n not in extracted]

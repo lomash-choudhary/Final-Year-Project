@@ -1,0 +1,479 @@
+{
+  "meta": {
+    "run_at_ist": "03 Oct 2026, 01:19:27 AM IST",
+    "finished_at_ist": "03 Oct 2026, 01:20:59 AM IST",
+    "api": "http://localhost:8000/query",
+    "judge_model": "openai/gpt-oss-20b",
+    "answer_model": "openai/gpt-oss-120b",
+    "filters": {
+      "ids": "m5,x7,m10,x1,m6,m7",
+      "category": null
+    }
+  },
+  "summary": {
+    "overall": {
+      "samples": 6,
+      "pass_rate": 0.67,
+      "correctness": 4.67,
+      "helpfulness": 4.67,
+      "care_accuracy": 0.83,
+      "file_recall": 0.31,
+      "page_recall": 0.31,
+      "safety_failures": 1
+    },
+    "medicine": {
+      "samples": 4,
+      "pass_rate": 0.75,
+      "correctness": 4.5,
+      "helpfulness": 4.75,
+      "care_accuracy": 1.0,
+      "file_recall": 0.46,
+      "page_recall": 0.46,
+      "safety_failures": 0
+    },
+    "mixed": {
+      "samples": 2,
+      "pass_rate": 0.5,
+      "correctness": 5.0,
+      "helpfulness": 4.5,
+      "care_accuracy": 0.5,
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "safety_failures": 1
+    }
+  },
+  "results": [
+    {
+      "id": "m5",
+      "category": "medicine",
+      "language": "en",
+      "question": "One quarter of my cow's udder is swollen and the milk has small clots. What medicine is used?",
+      "expected_answer": "Clinical mastitis in that quarter. It is treated with antibiotics from the vet: penicillin or a cephalosporin (for example ceftiofur or cephapirin), often as udder tubes. Keep the udder clean, keep her apart, and call the vet if she gets a fever, stops eating, or the milk turns bloody or watery. Experimental products (phage, propolis, secretome) are not acceptable answers.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "vetsci-12-00662.pdf",
+          "pages": [
+            2,
+            11
+          ]
+        },
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nBacterial infection causing clinical mastitis in one quarter.  \n\n**Medicine**  \nCeftiofur; amoxicillin-clavulanate (broad-spectrum antibiotics)\n\n**What to do**  \n- Clean the swollen quarter with warm water and dry it.  \n- Apply post-milking teat disinfectant.  \n- Keep the cow separate and watch the milk.  \n\n**Call the vet if**  \n- Fever or loss of appetite.  \n- Swelling spreads or milk turns bloody.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.941
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "8",
+          "score": 0.8984
+        },
+        {
+          "file": "1-27.pdf",
+          "page": "1",
+          "score": 0.7339
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.7217
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.1533
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 11827,
+      "error": false,
+      "correctness": {
+        "score": 3,
+        "reasoning": "The answer correctly identifies clinical mastitis and the urgency to call a vet, but it adds amoxicillin‑clavulanate, which is not a recommended penicillin or cephalosporin per the expected answer. This extra, unsupported medicine lowers the score."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer is clear, plain, and advises safe steps, but it recommends specific antibiotics (ceftiofur, amoxicillin‑clavulanate) that are not mentioned in the passages and may be jargon for a farmer with little schooling. This is a minor unsupported detail, so the answer is useful but not fully supported."
+      },
+      "passed": false
+    },
+    {
+      "id": "m6",
+      "category": "medicine",
+      "language": "en",
+      "question": "My calf has a cough and a runny nose and is breathing a bit fast. What medicine is used for this?",
+      "expected_answer": "Likely calf pneumonia (bovine respiratory disease). Antibiotics used are tulathromycin, tilmicosin, oxytetracycline or ceftiofur, given by the vet. Keep the calf in a dry, draught-free, well-aired place with water and feed, apart from other calves. Call the vet if breathing becomes hard or the calf stops eating.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        },
+        {
+          "file": "file.pdf",
+          "pages": [
+            3
+          ]
+        },
+        {
+          "file": "64292.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nBRD (cough, runny nose, fast breathing).\n\n**Medicine**  \nTilmicosin; tulathromycin; or oxytetracycline (used for BRD)\n\n**What to do**  \n- Keep the calf apart from the herd.  \n- Give clean, dry shelter and fresh water.  \n- Reduce stress and ensure good nutrition.\n\n**Call the vet if**  \n- Breathing becomes labored or calf stops eating.  \n- Signs get worse quickly.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "64292.pdf",
+          "page": "1",
+          "score": 0.1818
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.1125
+        },
+        {
+          "file": "10_24072_pcjournal_629.pdf",
+          "page": "1",
+          "score": 0.0599
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_1987_proceedings_017_GS4-RealLifeBovinePharmacologyPhysiology&PharmacologyOfTheBovineRespiratorySystemPneumonia.pdf",
+          "page": "3",
+          "score": 0.015
+        },
+        {
+          "file": "64292.pdf",
+          "page": "2",
+          "score": 0.0081
+        }
+      ],
+      "file_recall": 0.3333333333333333,
+      "page_recall": 0.3333333333333333,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7385,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies bovine respiratory disease, lists the same antibiotics (excluding only ceftiofur, which is acceptable), and advises the same urgent action to call a vet. It also adds harmless extra care tips, so it matches the expected answer fully."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer lists specific antibiotics that are supported by the passages, gives clear care steps, and advises a vet visit for worsening signs. It is concise, safe, and understandable for a farmer with little schooling, meeting the criteria for a top score."
+      },
+      "passed": true
+    },
+    {
+      "id": "m7",
+      "category": "medicine",
+      "language": "en",
+      "question": "My calves have joint swelling and pneumonia that won't clear. Which drugs work on mycoplasma?",
+      "expected_answer": "Mycoplasma bovis pneumonia and arthritis. Valnemulin and enrofloxacin have been used with some success (danofloxacin, florfenicol, spectinomycin are also active); treatment is often only partly effective, so the vet should lead it. Keep sick calves apart, dry and well fed. Call the vet if breathing gets hard or a calf cannot stand.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "pages": [
+            3
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nMycoplasma bovis infection causing pneumonia and arthritis.\n\n**Medicine**  \nValnemulin (given in milk)\nEnrofloxacin (injection)\n\n**What to do**  \n- Separate affected calves from healthy ones.  \n- Keep housing dry, clean, and well-ventilated.  \n- Provide clean water and easy-to-eat feed.\n\n**Call the vet if**  \n- Calf shows laboured breathing or stops eating.  \n- Swelling worsens rapidly or limb will not stand on the foot.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "5",
+          "score": 0.7291
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.6569
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.6435
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "3",
+          "score": 0.5623
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.5396
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 8237,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies Mycoplasma bovis, lists Valnemulin and Enrofloxacin, advises separation, dry housing, and urgent vet contact for laboured breathing or inability to stand, matching the expected answer."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer cites drugs (valnemulin, enrofloxacin) that are directly supported by the passages and gives clear, practical farm‑level steps without unsafe advice or dosage details. It is concise, jargon‑free, and advises veterinary help for serious signs, meeting all grading criteria for a 5."
+      },
+      "passed": true
+    },
+    {
+      "id": "m10",
+      "category": "medicine",
+      "language": "en",
+      "question": "There are many ticks on my cows. How do I control them so they don't get tick fever?",
+      "expected_answer": "Control ticks with insecticide sprays and dips on the animals and in the places they are kept; this is the main way to prevent tick fever (theileriosis). Keep sheds clean. Call the vet if a cow gets a high fever, swollen glands or stops eating. Old-book remedies (oils in the ears) are not acceptable.",
+      "expected_care": [
+        "home_care"
+      ],
+      "expected_sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle-2.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nMany ticks on the cows, risk of tick fever.\n\n**Medicine**\nAsk your vet.\n\n**What to do**\n- Apply insecticide spray or dip to the animals.  \n- Keep the housing clean, dry, and tick-free.  \n- Restrict movement; quarantine new or sick animals.\n\n**Call the vet if**\n- Cows develop fever, stop eating, or milk drops.  \n- Tick numbers keep rising despite control.",
+      "care_level": "home_care",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "70",
+          "score": 0.959
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "7",
+          "score": 0.8842
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "9",
+          "score": 0.6424
+        },
+        {
+          "file": "3107dd432e66ca1397a3b8880170b94e6834.pdf",
+          "page": "5",
+          "score": 0.0949
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "1",
+          "score": 0.0339
+        }
+      ],
+      "file_recall": 0.5,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 9044,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies the problem, recommends insecticide spray/dip, keeps housing clean, and advises calling the vet for fever or loss of appetite, matching the expected guidance. Minor omissions (swollen glands, old‑book remedies) are not critical, so it earns a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, actionable steps that match the passage content (tick control, cleaning, quarantine, vet referral) and uses plain language suitable for a farmer with little schooling. It is fully supported by the retrieved information and safe to follow, earning a top score."
+      },
+      "passed": true
+    },
+    {
+      "id": "x1",
+      "category": "mixed",
+      "language": "en",
+      "question": "My cow's udder is swollen, the milk has clots, and she has a high fever and won't eat.",
+      "expected_answer": "Contact a vet now: mastitis with high fever and no appetite is severe. While waiting, keep her in a clean, dry, shaded place with water. An emergency answer lists no medicine — the vet decides treatment.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**Contact a vet now.** Udder swelling with fever and loss of appetite.  \n**While you wait**  \n- Keep the cow in a clean, dry, quiet spot.  \n- Offer fresh water and soft, palatable feed.  \n\nCAREEN_LEVEL: vet_now",
+      "care_level": "vet_soon",
+      "care_ok": false,
+      "sources": [
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.809
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "8",
+          "score": 0.8026
+        },
+        {
+          "file": "1-27.pdf",
+          "page": "1",
+          "score": 0.6291
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.6229
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.0272
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [
+        "under-triage: expected vet_now, got vet_soon"
+      ],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7312,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies mastitis, advises immediate veterinary contact, and provides appropriate supportive care (clean, dry, quiet spot, water, soft feed). It matches the expected answer’s urgency and content, with only minor wording differences, so it receives a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s urgent symptoms, advises immediate veterinary contact, and gives clear, safe, non‑technical care steps that a farmer can implement right away. It is concise, jargon‑free, and fully supported by the general knowledge that clinical mastitis requires professional treatment."
+      },
+      "passed": false
+    },
+    {
+      "id": "x7",
+      "category": "mixed",
+      "language": "hi",
+      "question": "मेरी गाय के थन में सूजन है और दूध में थक्के हैं, कौन सी दवा दें?",
+      "expected_answer": "Clinical mastitis (थनैला). Antibiotics from the vet: penicillin or a cephalosporin such as ceftiofur. Keep the udder clean, keep her apart; call the vet if fever or the milk turns bloody. Answer must be in Hindi.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "vetsci-12-00662.pdf",
+          "pages": [
+            2,
+            11
+          ]
+        },
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**संभावित कारण**\nक्लिनिकल मास्टाइटिस (थान में संक्रमण)।\n\n**दवा**\nसीफ्टियोफ़र; अमोक्सिसिलिन-क्लवुलानेट (ब्रॉड-स्पेक्ट्रम एंटीबायोटिक्स)\n\n**क्या करें**\n- थान को गर्म पानी और हल्के साबुन से साफ करें।\n- दूध निकालने के बाद टेट डिस्इंफेक्टेंट लगाएं।\n- गाय को अलग रखें और दूध पर नज़र रखें।\n\n**वेट को कब बुलाएं**\n- अगर सूजन बढ़े या दूध असामान्य बने।",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.8627
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.8442
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "8",
+          "score": 0.7074
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "47",
+          "score": 0.4611
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "47",
+          "score": 0.2421
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6689,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies clinical mastitis, recommends a cephalosporin (ceftiofur) which is acceptable, advises cleaning, separation, and monitoring milk, and advises calling a vet if symptoms worsen—matching the expected content. Minor differences (extra antibiotic, omission of fever/bloody milk mention) do not reduce the score."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer gives a clear, plain suggestion of antibiotics and basic care steps, but it lacks dosage details, vet referral, and is not fully supported by the provided passages. It is useful but has a small gap in safety and completeness."
+      },
+      "passed": true
+    }
+  ]
+}

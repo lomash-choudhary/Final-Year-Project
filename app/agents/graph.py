@@ -29,6 +29,9 @@ Two cycles make this a state machine rather than a pipeline: grader→retriever
 (re-search when evidence is weak) and the cross-turn clarifier loop (ask, wait
 for the human, then continue).
 
+Cross-turn state (history, the clarifier's "waiting for answers" flag) is not
+held by the graph: `main.py` loads it from `app/memory/store.py` and seeds each run.
+
 `translate_in` and `translate_out` bracket everything so the whole middle of the
 graph only ever deals with English, whatever the user typed.
 """
@@ -36,7 +39,6 @@ graph only ever deals with English, whatever the user typed.
 from __future__ import annotations
 
 import logfire
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.agents.nodes.advisor import advise_node
@@ -120,7 +122,10 @@ def build_graph():
     workflow.add_edge("advisor", "translate_out")
     workflow.add_edge("translate_out", END)
 
-    compiled = workflow.compile(checkpointer=MemorySaver())
+    # No checkpointer: conversation memory lives in Postgres (app/memory/store.py)
+    # and `main.py` seeds each run with a bounded window + summary. MemorySaver
+    # kept it in RAM — lost on every restart — and grew without bound.
+    compiled = workflow.compile()
     logfire.info(
         "Agent graph compiled",
         self_correction=settings.ENABLE_SELF_CORRECTION,

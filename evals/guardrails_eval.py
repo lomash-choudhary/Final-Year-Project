@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import time
+import uuid
 
 import logfire
 import requests
@@ -38,6 +39,9 @@ def _was_blocked(payload: dict) -> bool:
 def run_guardrails_eval(samples: list[dict], progress_callback=None) -> list[dict]:
     """Run each test case against the live API, labelling results TP/TN/FP/FN."""
     results = copy.deepcopy(samples)
+    # Conversation memory is persistent now: a fixed thread id would replay the
+    # previous run's turns into this one. One fresh tag per run keeps samples isolated.
+    run_tag = uuid.uuid4().hex[:8]
     total = len(results)
 
     with logfire.span("Eval — guardrails", total=total):
@@ -48,7 +52,7 @@ def run_guardrails_eval(samples: list[dict], progress_callback=None) -> list[dic
             try:
                 response = requests.post(
                     API_URL,
-                    json={"q": sample["input"], "thread_id": f"guardrail-eval-{sample['id']}"},
+                    json={"q": sample["input"], "thread_id": f"guardrail-eval-{sample['id']}-{run_tag}"},
                     timeout=90,
                 )
                 response.raise_for_status()

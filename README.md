@@ -46,7 +46,7 @@ graph TB
         RT["Retriever<br/>search + rerank"]
         GD{"Grader<br/>context good enough?"}
         RS["Responder<br/>grounded synthesis"]
-        MEM[("MemorySaver<br/>per thread_id")]
+        MEM[("Postgres memory<br/>summary + recent window")]
     end
 
     subgraph RETRIEVAL ["Retrieval"]
@@ -124,13 +124,15 @@ Full diagrams: [ARCHITECTURE.md](ARCHITECTURE.md).
 separate, and each is protected differently:
 
 ```
-EMBEDDINGS   Gemini (free quota)  →  local sentence-transformers (offline, unlimited)
+EMBEDDINGS   Gemini key 1  →  Gemini key 2 (same model)  →  local sentence-transformers (offline)
 REASONING    Groq key 1 · primary model  →  Groq key 2 · primary model
           →  Groq key 1 · fast model     →  Groq key 2 · fast model  →  Gemini chat
 ```
 
 Your `GROQ_FALLBACK_API_KEY` is a genuine second free quota on the reasoning side. On the
-embedding side the safety net is a local model that needs no API at all.
+embedding side, `GEMINI_FALLBACK_API_KEY` (a key from a *second* Google Cloud project) takes over
+with the same embedding model once the primary exhausts its `EMBED_MAX_RETRIES` retries; behind
+that, the safety net is a local model that needs no API at all.
 
 Three further mechanisms keep the free Gemini quota from being the bottleneck:
 
@@ -366,7 +368,7 @@ that must *not* be blocked.
 ├── ui/app.py                   # Streamlit chat interface
 ├── scripts/doctor.py           # preflight check
 ├── DOCS/                       # deep-dive documentation
-├── DATA/                       # the corpus (16 PDFs)
+├── DATA/                       # the corpus (46 PDFs)
 ├── processed_data/             # generated — parsed and chunked JSON per document
 └── docker-compose.yml          # local Qdrant
 ```

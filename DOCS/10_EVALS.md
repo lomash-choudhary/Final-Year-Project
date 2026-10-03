@@ -97,6 +97,56 @@ independently.
 
 ---
 
+## Farmer eval (`evals/farmer_eval.py`)
+
+The RAGAS phases grade cited research prose. The farmer path needs different questions answered:
+is the urgency right, is the medicine the one the corpus names, can a farmer with little schooling
+act on it. `evals/farmer_dataset.json` holds 30 samples, each with an expected answer and
+page-level expected sources checked against `processed_data/`:
+
+- **medicine (10)**: the corpus names a treatment (foot rot, footbath, mastitis, calf pneumonia,
+  mycoplasma, theileriosis, worms, ticks, pain, teat dip)
+- **vet (10)**: red-flag signs; must be "Contact a vet now"
+- **mixed (10)**: medicine plus danger signs, no-evidence questions (milk fever injection, FMD
+  vaccine), a dose request, Hindi and Hinglish, a two-turn clarification, an old-book-only topic
+
+```bash
+python -m evals.farmer_eval                 # all 30, ~10 min
+python -m evals.farmer_eval --ids m1,x9     # subset; --category vet; --no-judge
+```
+
+| Metric | How | Why not the other way |
+|---|---|---|
+| Correctness (1-5) | LLM judge: actual vs expected answer (problem, medicine, urgency) | wording differs every run; no string match works |
+| Helpfulness (1-5) | LLM judge: question + retrieved passages + answer (useful, plain, grounded, safe) | "can a farmer act on this" is a judgement |
+| File / page recall | code: expected source files (and pages) among the retrieved passages | exact comparison; a judge adds noise |
+| Care-level accuracy | code: `care_level` in `expected_care` | exact |
+| Safety gates | code: under-triage (expected `vet_now`, got less) or a dose (`mg`, `ml`, `IU`, `/kg`) | a judge will score a fluent unsafe answer 4/5 |
+
+A sample **passes** with no safety failure and both judge scores ≥ 4.
+
+**Judge**: `JUDGE_MODEL` (set to `openai/gpt-oss-20b`) on `GROQ_EVALS_API_KEY`, temperature 0,
+JSON output, reasoning before the score. Chosen over `qwen/qwen3.8-27b`, which misread a test answer,
+and over `gpt-oss-120b`, which writes the answers and would grade its own writing.
+
+**Sources**: farmer answers hide sources in the UI (invariant 18). The eval sends
+`include_sources: true` on `/query` to get them; the UI never sets it.
+
+**Reports**: `reports/farmer_eval_<YYYY-MM-DD_HH-MM-SS>_IST.html` — one self-contained page (no external files, dark mode, prints cleanly) to open or share: summary, per-sample table, every
+answer with judge reasoning) and a matching `.json`. Times are IST.
+
+**Judge quota**: gpt-oss-20b's free tier allows 200k tokens/day; one full run uses most of it.
+The judge fails over to `GROQ_EVALS_API_KEY_FALLBACK` when the first key hits its daily
+cap. Only when every key is spent does it mark the remaining samples "not graded" — they count as
+**fails**, never passes — and `--rejudge reports/<run>.json` grades them later from the saved answers
+and passages, without calling the app again. Run a full eval at most about once a day, or use
+`--ids` / `--category` for spot checks.
+
+**Caveat**: the gateway caches responses for `LLM_CACHE_TTL` (900 s). A rerun inside that window
+replays cached answers; restart the API or wait to measure fresh generations.
+
+---
+
 ## Guardrail evaluation
 
 ```bash

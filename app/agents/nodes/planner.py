@@ -21,12 +21,14 @@ import re
 
 import logfire
 
+from app.agents.history import format_history, has_history
 from app.agents.state import AgentState
 from app.llm import AllTargetsFailed, router
 
 _PROMPT = """You are the planning step of a cattle and buffalo health assistant. Its knowledge base \
 is a corpus of peer-reviewed papers on bovine disease (haemoprotozoal diseases, brucellosis, lumpy \
-skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health).
+skin disease, foot and eye disorders, genetic disorders, E. coli, dairy herd health, mastitis, \
+lameness, respiratory disease, antimicrobial treatment).
 
 CONVERSATION SO FAR:
 {history}
@@ -37,37 +39,32 @@ LATEST USER MESSAGE:
 Classify the message as exactly one of:
 
 - CONVERSATIONAL — small talk, a thank-you, or a question answerable entirely from the conversation \
-above without consulting any paper.
-- SYMPTOM — the person is describing a problem with their own animal and wants practical help. \
-Examples: "my cow has stopped eating", "milk production has dropped", "she has a fever", "there is \
-swelling on the leg". This includes short replies that answer earlier follow-up questions about a \
-sick animal.
-- RESEARCH — a factual or academic question about the literature. Examples: "what is the prevalence \
-of theileriosis in India", "which season has the highest incidence", "what did the study find".
+above without consulting any paper. Never a new question about an animal's health.
+- SYMPTOM — a practical question from someone who keeps animals: a problem with their own animal, \
+or what to give, apply, feed, clean or vaccinate with, or how to prevent a disease. Examples: \
+"my cow has stopped eating", "what footbath should I use", "how do I clean my shed", "what should \
+I give for worms". This includes short replies that answer earlier follow-up questions.
+- RESEARCH — a question about the studies themselves: prevalence, incidence, seasonality, study \
+findings, methods, comparisons. Examples: "what is the prevalence of theileriosis in India", \
+"which season has the highest incidence", "what did the study find".
 
 Then write a self-contained search query for the knowledge base:
 - Resolve every pronoun and ellipsis against the conversation.
 - Use plain descriptive terms a veterinary paper would use.
 - Write it as natural language, NOT as a boolean expression. Do not use AND, OR, quotes or brackets \
 — the search is semantic, so operators only add noise.
-- For SYMPTOM, describe the clinical signs rather than repeating the farmer's phrasing. Example: \
-"my cow won't eat and seems weak" becomes "cattle anorexia loss of appetite weakness causes".
+- For SYMPTOM, name the signs in veterinary terms AND keep what the farmer is asking for \
+(what to apply, what to give, how to prevent). Example: "my cow's udder is swollen and the milk has \
+clots, what medicine?" becomes "swollen udder clots in milk clinical mastitis dairy cow treatment".
+- For SYMPTOM, also give the single most likely disease name, or NONE if unclear.
+- Keep the farmer's body-part words; do not move them (a cow's left side is the belly/rumen side, \
+not the chest).
 - Do not invent details that were never mentioned.
 
 Reply in exactly this format and nothing else:
 INTENT: <CONVERSATIONAL or SYMPTOM or RESEARCH>
-QUERY: <the search query, or NONE for CONVERSATIONAL>"""
-
-
-def _format_history(messages: list[dict], limit: int = 6) -> str:
-    """Last few turns, excluding the message being planned for."""
-    prior = messages[:-1][-limit:]
-    if not prior:
-        return "(this is the first message)"
-    return "\n".join(
-        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {str(m.get('content', ''))[:600]}"
-        for m in prior
-    )
+QUERY: <the search query, or NONE for CONVERSATIONAL>
+DISEASE: <disease name, or NONE>"""
 
 
 # Boolean operators are meaningless to a vector search and dilute the embedding,
@@ -80,13 +77,26 @@ def _clean_query(query: str) -> str:
     return re.sub(r"\s{2,}", " ", cleaned).strip(" -:") or query
 
 
-def _parse(raw: str, fallback_query: str) -> tuple[str, str]:
+def _parse_disease(raw: str) -> str:
+    """The planner's disease guess, or "" — it only ever widens retrieval, so a miss is harmless."""
+    match = re.search(r"DISEASE:\s*(.+)", raw, re.IGNORECASE)
+    disease = _clean_query(match.group(1).strip().strip('"')) if match else ""
+    return "" if disease.upper().startswith(("NONE", "UNKNOWN", "UNCLEAR")) else disease[:80]
+
+
+def _parse(raw: str, fallback_query: str, has_history: bool = True) -> tuple[str, str]:
     """Pull INTENT/QUERY out of the model output, tolerating format drift."""
     intent_match = re.search(r"INTENT:\s*(CONVERSATIONAL|SYMPTOM|RESEARCH)", raw, re.IGNORECASE)
     query_match = re.search(r"QUERY:\s*(.+)", raw, re.IGNORECASE)
 
     intent = (intent_match.group(1).lower() if intent_match else "")
     query = query_match.group(1).strip().strip('"') if query_match else ""
+
+    if intent == "conversational" and not has_history:
+        # Nothing to answer from: a first message labelled conversational was a
+        # health question the small model misread ("bachhde ko khansi hai" came
+        # back as a refusal). Small talk never gets here — the guardrails answer it.
+        intent = "symptom"
 
     if intent not in ("conversational", "symptom", "research"):
         # No parseable intent: default to research. A needless retrieval is a
@@ -107,7 +117,7 @@ def planner_node(state: AgentState) -> dict:
     user_message = state.get("query_en") or (
         str(messages[-1]["content"]) if messages else state.get("original_query", "")
     )
-    history = _format_history(messages)
+    history = format_history(state, empty="(this is the first message)")
 
     with logfire.span("Planner", query=user_message[:120]):
         try:
@@ -115,17 +125,18 @@ def planner_node(state: AgentState) -> dict:
                 _PROMPT.format(history=history, message=user_message),
                 tier="fast",
                 temperature=0.0,
-                max_tokens=180,
+                max_tokens=220,
                 feature="planner",
             )
-            intent, search_query = _parse(response.content, user_message)
+            intent, search_query = _parse(response.content, user_message, has_history(state))
+            disease = _parse_disease(response.content) if intent == "symptom" else ""
             logfire.info("Intent classified", intent=intent, search_query=search_query[:120])
 
         except AllTargetsFailed as exc:
             # Degrade rather than fail: treat it as a research question and search
             # with the raw message. Retrieval still works without the planner.
             logfire.warning("Planner unavailable ({err}) — using the raw query", err=str(exc)[:200])
-            intent, search_query = "research", user_message
+            intent, search_query, disease = "research", user_message, ""
 
         base_plan = state.get("plan", [])
 
@@ -133,14 +144,19 @@ def planner_node(state: AgentState) -> dict:
             return {
                 "intent": "conversational",
                 "search_query": "",
+                "likely_disease": "",
                 "documents": [],
                 "status": "Answering from conversation memory",
                 "plan": base_plan + ["Intent: conversational — no retrieval needed"],
             }
 
+        plan = [f"Intent: {intent}", f"Search query: {search_query}"]
+        if disease:
+            plan.append(f"Likely disease: {disease}")
         return {
             "intent": intent,
             "search_query": search_query,
+            "likely_disease": disease,
             "status": f"Looking this up: {search_query}",
-            "plan": base_plan + [f"Intent: {intent}", f"Search query: {search_query}"],
+            "plan": base_plan + plan,
         }

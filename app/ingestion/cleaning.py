@@ -25,6 +25,11 @@ import logfire
 
 from app.ingestion.loaders.base import Page
 
+# U+00AD SOFT HYPHEN marks where a typesetter *may* break a word. Older
+# proceedings PDFs keep it in the text layer ("bacte\xad ria"), and NFKC does not
+# fold it — left in, "bacteria" is split into two tokens the embedder never joins.
+_SOFT_HYPHEN = re.compile(r"\u00ad\s*")
+
 # "haemo-\nprotozoa" -> "haemoprotozoa". Requires lowercase before the hyphen so
 # we do not destroy genuine compounds like "Theileria-\nBabesia".
 _HYPHEN_LINEBREAK = re.compile(r"([a-z])-\s*\n\s*([a-z])")
@@ -49,6 +54,7 @@ def normalize_text(text: str) -> str:
     # NFKC folds ligatures (ﬁ -> fi, ﬂ -> fl) and full-width forms into ASCII.
     text = unicodedata.normalize("NFKC", text)
     text = _CONTROL_CHARS.sub("", text)
+    text = _SOFT_HYPHEN.sub("", text)
 
     # De-hyphenate before un-wrapping, otherwise the soft-wrap pass joins the two
     # halves with the hyphen still in the middle.

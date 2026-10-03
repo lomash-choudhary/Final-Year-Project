@@ -10,13 +10,19 @@ The most common misreading of the free-tier plan. Groq serves chat/completion mo
 "Gemini first, then Groq" cannot apply to embeddings — the two ladders are separate:
 
 ```
-EMBEDDINGS   Gemini  →  local sentence-transformers
+EMBEDDINGS   Gemini key 1  →  Gemini key 2 (same model)  →  local sentence-transformers
 REASONING    Groq key 1 · GROQ_PRIMARY_MODEL  →  Groq key 2 · GROQ_PRIMARY_MODEL
           →  Groq key 1 · GROQ_FAST_MODEL     →  Groq key 2 · GROQ_FAST_MODEL
           →  Gemini · GEMINI_CHAT_MODEL
 ```
 
-Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning side.
+Your `GROQ_FALLBACK_API_KEY` is a real second quota, but only on the reasoning side. The
+embedding side has its own: `GEMINI_FALLBACK_API_KEY` runs the **same** `GEMINI_EMBEDDING_MODEL`
+(same vector space, same dimension, same cache entries), so swapping keys mid-run is safe in a way
+swapping models never is. A batch spends `EMBED_MAX_RETRIES` retries on the active key, then moves
+to the next key, which stays active for the rest of the run. Each key has its own rate limiter.
+The free quota belongs to a Google Cloud *project* — a second key from the same project shares it
+and buys nothing.
 
 ---
 
@@ -62,11 +68,11 @@ downstream would then be wrong, which is worse than the missing pages.
 
 ## 5. `plan` is deliberately not a LangGraph reducer
 
-`messages` uses `operator.add` so conversation history accumulates. `plan` does not.
-
-MemorySaver persists state per `thread_id`. If `plan` accumulated, turn 3 of a conversation would
-show the reasoning steps from turns 1 and 2 as well. Nodes concatenate explicitly with
-`state.get("plan", []) + [...]`, and the planner — which runs first on every turn — resets it.
+`messages` uses `operator.add` so nodes can append replies. `plan` does not: it is one turn's
+reasoning. When the graph had a `MemorySaver` checkpointer, an accumulating plan would have shown
+turn 1 and 2's steps on turn 3. The graph now has no checkpointer (memory is seeded per request —
+§24), but the rule stands: nodes concatenate explicitly with `state.get("plan", []) + [...]`, and
+`translate_in` resets it.
 
 ---
 
@@ -183,6 +189,11 @@ which produces a run that succeeds for four files and then 429s continuously.
 
 `EMBED_MAX_RPM` is counted in texts for this reason. At the default 90, a 805-chunk corpus takes
 about nine minutes of wall-clock. That pacing is the feature.
+
+There is also a **daily** cap of roughly 1000 texts per Google Cloud project. The ~2200-chunk corpus
+cannot be embedded from scratch on one key in one day — that is what `GEMINI_FALLBACK_API_KEY` and
+the embedding cache are for. Adding 1474 chunks on 2026-10-01 exhausted the primary key's day after
+~950 texts; the run failed over to the fallback key and finished without intervention.
 
 ---
 
@@ -322,3 +333,49 @@ Note that Groq's `GET /v1/models` and `/chat/completions` sit behind Cloudflare,
 `403 error code: 1010` to clients sending no `User-Agent` (Python's bare `urllib` among them). That
 403 is a client-fingerprint rejection, **not** an invalid key — resend with a normal `User-Agent`
 before concluding anything about your credentials.
+
+---
+
+## 23. A non-empty page can still be unusable text
+
+The PDF cascade originally fell through to the next tier only on an **empty** page. An OCR'd
+archive.org scan extracted through pypdf with every space missing — 72 of 82 pages arrived as one
+token each — and passed every check, because it was not empty. It would have embedded 122 chunks
+of noise. The loader now scores each page's "glued" share (characters inside >25-char tokens) and
+re-extracts pages above 0.5 with PyMuPDF. Run `--dry-run` on new PDFs and look at the text: the
+check is cheap, and this class of defect is invisible in the run summary.
+
+---
+
+## 24. Conversation memory: bounded, persistent, and never the whole history
+
+The graph used to remember conversations with LangGraph's `MemorySaver`. Two problems:
+
+- **It lived in RAM.** Every restart — and every Render free-tier sleep — wiped it, so in
+  production the assistant effectively had no memory, and there was nothing for the frontend to
+  show as history.
+- **It rotted.** `messages` grew without bound, and every node's full state (retrieved passages
+  included) was checkpointed on every step. Nodes only read the last six messages, so older turns
+  were silently dropped rather than summarised.
+
+Memory is now Postgres (`app/memory/store.py`) and the graph has no checkpointer. The model sees
+`rolling summary + last MEMORY_WINDOW_TURNS turns`, so prompt size is flat. Things that look like
+optimisations but break it:
+
+- **Loading the full history into the prompt.** Long chats would blow the Groq TPM budget and
+  dilute the current question. The window is the cap; the summary carries the rest.
+- **Storing passages or the plan as memory.** That is the old bloat. Sources are kept per message,
+  trimmed to 300 characters, for display only.
+- **Summarising on the request path.** It is a background task; a failed summary keeps the window
+  and retries next turn.
+- **Health-checking pooled connections on checkout.** Neon can be 100–250 ms away; a check per
+  checkout doubles every call. The pool closes idle connections before Neon's 5-minute suspend
+  (`max_idle=240`) and retries once on `OperationalError` instead. Every store call is one
+  statement — the turn upsert + both message inserts are a single CTE.
+- **Server-side prepared statements on Neon's pooled endpoint.** It is PgBouncer in transaction
+  mode; `prepare_threshold=None` keeps psycopg from preparing.
+- **Fixed eval thread ids.** Memory now survives across runs, so `eval-<id>` would replay the
+  previous run's turns. The eval harnesses append a per-run tag.
+
+Ownership is by `user_id` on every read and write. The frontend's auth is still a mock token, so
+this separates users but is not a security boundary.

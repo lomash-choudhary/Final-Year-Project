@@ -21,6 +21,7 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | Variable | Purpose |
 |---|---|
 | `GROQ_FALLBACK_API_KEY` | A second Groq account. This is a genuine second free quota — the router falls back to it when the first is rate-limited. Setting it to the same value as `GROQ_API_KEY` buys nothing and the router detects and skips it |
+| `GEMINI_FALLBACK_API_KEY` | A second Gemini key **from a different Google Cloud project** (quota is per project). Same `GEMINI_EMBEDDING_MODEL`, so same vector space. A batch fails over to it after the primary exhausts `EMBED_MAX_RETRIES`, and it stays active for the rest of the run. Identical to `GEMINI_API_KEY` = ignored |
 | `QDRANT_API_KEY` | Required for Qdrant Cloud; leave blank for local Docker |
 | `LOGFIRE_TOKEN` | Distributed tracing. Without it, tracing goes to console only |
 
@@ -42,7 +43,10 @@ readable problems instead of letting the app die three layers deep in an SDK.
 | `LOCAL_EMBEDDING_MODEL` | *(from `.env`)* | Offline `sentence-transformers` fallback. Downloads its weights on first use, then runs offline forever. Required unless `EMBEDDING_PROVIDER = gemini` |
 | `EMBED_BATCH_SIZE` | `16` | Texts per Gemini request. Auto-halves on a batch-size rejection |
 | `EMBED_MAX_RPM` | `90` | **Texts per minute, not requests per minute.** Gemini charges `embed_content_free_tier_requests` per *text*: a batch of 16 costs 16 units, not 1. The free ceiling is 100. Keep this below it |
-| `EMBED_MAX_RETRIES` | `5` | Retries on 429. The provider's own `retryDelay` (typically ~55s) is parsed from the error and honoured — computed backoff alone tops out near 17s and just retries inside the same blocked minute |
+| `EMBED_MAX_RETRIES` | `5` | Retries on 429 **per key** (5 retries = 6 calls); after that the batch fails over to `GEMINI_FALLBACK_API_KEY`. The provider's own `retryDelay` (typically ~55s) is parsed from the error and honoured — computed backoff alone tops out near 17s and just retries inside the same blocked minute |
+| `INGEST_ENGLISH_ONLY` | `true` | Skip non-English documents at ingestion (and delete their old points). Already-indexed files are only re-checked with `--force` |
+| `INGEST_MIN_LATIN_SHARE` | `0.9` | Fraction of letters that must be Latin script. Catches Cyrillic/Devanagari/CJK |
+| `INGEST_MIN_ENGLISH_STOPWORDS` | `0.12` | Fraction of words that must be English function words. Catches other Latin-script languages; English measures 0.21–0.33 |
 | `EMBEDDING_CACHE_ENABLED` | `true` | **Leave this on.** It is what makes re-ingestion free |
 | `EMBEDDING_CACHE_PATH` | `.cache/embeddings.sqlite3` | Keyed by provider + model + dimension + text |
 
@@ -84,6 +88,22 @@ Changing any of these requires a `--wipe` re-ingest to take effect on existing d
 | `GUARDRAILS_MODE` | `fast` | `off` / `fast` / `full`. See [08](08_GUARDRAILS.md) |
 | `LLM_CACHE_ENABLED` | `true` | In-process response cache |
 | `LLM_CACHE_TTL` | `900` | Seconds |
+| `ADVICE_HISTORICAL_SOURCES` | `notesondiseaseof00kori.pdf` | Comma-separated source files that are historical texts. The farmer advisor sees their passages labelled `[OLD BOOK]` and uses them for hygiene only, never for medicine |
+
+---
+
+## Conversation memory
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | *(blank)* | Postgres URL — use the frontend's Neon database; tables are created in schema `rag`. Blank = memory in RAM only (lost on restart) and no chat history for the UI |
+| `MEMORY_WINDOW_TURNS` | `4` | Recent turns (user + assistant) the model sees verbatim |
+| `MEMORY_SUMMARY_BATCH_TURNS` | `2` | Turns past the window before one fast-tier summary call — batching keeps it to one call every few turns |
+| `MEMORY_SUMMARY_MAX_CHARS` | `800` | Rolling summary cap (~200 tokens) |
+| `MEMORY_MSG_MAX_CHARS` | `600` | Per-message cap when history goes into a prompt |
+| `MEMORY_RETENTION_DAYS` | `90` | Idle conversations older than this are deleted |
+| `MEMORY_ANON_RETENTION_DAYS` | `7` | Same, for conversations sent without a `user_id` (evals, scripts) |
+| `MEMORY_MAX_CONVERSATIONS_PER_USER` | `200` | Oldest beyond this are deleted per user |
 
 ---
 

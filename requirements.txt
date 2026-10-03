@@ -23,6 +23,7 @@ langchain                     # Core abstractions
 langchain-core                # Messages / runnables
 langchain-text-splitters      # RecursiveCharacterTextSplitter (primary chunker)
 langgraph                     # Stateful, cyclic agent graph
+psycopg[binary,pool]          # Postgres: conversation memory + chat history (Neon free tier)
 pydantic>=2.0.0               # Schemas & validation
 
 # --- VECTOR DB & RETRIEVAL ---
