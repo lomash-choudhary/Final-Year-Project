@@ -72,6 +72,8 @@ app/
     └── ranking_service.py        FlashRank cross-encoder singleton
 
 evals/                            golden_dataset.json · pipeline.py · metrics.py · guardrails_eval.py · app.py
+                                  farmer_dataset.json · farmer_eval.py (farmer LLM-as-judge eval)
+reports/                          farmer eval reports, IST-stamped (.html to read and share, .json for data)
 ui/app.py                         Streamlit chat UI
 scripts/doctor.py                 preflight check (no API calls by default)
 DOCS/01..10                       deep-dive docs — 06_KNOWN_GOTCHAS.md is the important one
@@ -117,6 +119,12 @@ streamlit run evals/app.py --server.port 8502 # make evals      → :8502
 python -m evals.pipeline                     # phase 1: replay golden set against the LIVE API
 python -m evals.metrics                      # phase 2: zero-cost metrics + RAGAS (10-15 min)
 python -m evals.guardrails_eval              # guardrail confusion matrix
+
+# farmer eval — 30 questions (medicine / vet / mixed), LLM-as-judge; needs the API running
+python -m evals.farmer_eval                  # all 30 (~10 min) → reports/farmer_eval_<IST time>_IST.html (shareable) + .json
+python -m evals.farmer_eval --ids m1,v2,x9   # a subset (make eval-farmer runs all)
+python -m evals.farmer_eval --category vet   # medicine | vet | mixed
+python -m evals.farmer_eval --no-judge       # code metrics only: care level, sources, safety gates
 
 # cleanup
 make clean-index                             # rm processed_data/ manifest .cache (Qdrant untouched)
@@ -200,12 +208,14 @@ Full reasoning in `DOCS/06_KNOWN_GOTCHAS.md`.
     dropped, doses cut from `_RX`-matched items, the model's own vet/prescription notes stripped, "Give X injection"
     steps rewritten to "Ask your vet for X", jargon rewritten; Unicode folded first because gpt-oss emits
     U+2011 hyphens) because the prompt alone did not hold. Passages from `ADVICE_HISTORICAL_SOURCES`
-    reach the model labelled `[OLD BOOK]` and may only supply hygiene steps. Red-flag signs force `care_level = vet_now` regardless of what the passages say,
+    reach the model labelled `[OLD BOOK]` and may only supply hygiene steps. Red-flag signs force `care_level = vet_now` regardless of what the passages say — in the
+    prompt and again in code (`advisor._RED_FLAGS` on the English question → fixed "Contact a vet now" answer),
     and a `vet_now` answer collapses to "Contact a vet now" + at most two safe steps. Default on a missing/unparsable
     care level is the conservative `vet_soon`.
 18. **Farmer answers carry no citation markers and no sources panel** (`main.py` suppresses
-    `sources` when `intent == "symptom"`); the advisor's context is deliberately unnumbered so the
-    model cannot cite. `SHOW_CITATIONS_IN_ADVICE=true` puts them back.
+    `sources` when `intent == "symptom"`, unless the eval-only `include_sources` request field is
+    set); the advisor's context is deliberately unnumbered so the model cannot cite.
+    `SHOW_CITATIONS_IN_ADVICE=true` puts them back.
 19. **No model name is hardcoded anywhere — not even as a fallback.** Every model identifier comes
     from `.env` via `settings` (`GROQ_PRIMARY_MODEL`, `GROQ_FAST_MODEL`, `GROQ_TRANSLATE_MODEL`,
     `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`,
@@ -311,6 +321,7 @@ against the same Qdrant cluster.**
 | plan strings in nodes | check `evals/pipeline.py:detect_tool` still classifies correctly |
 | a model that has been decommissioned | edit `.env` only — no source change; `python -m scripts.doctor` prints the resolved names |
 | guardrail regexes | run `python -m evals.guardrails_eval` — it reports FP/FN separately |
+| advisor / clarifier / planner prompts or farmer retrieval | run `python -m evals.farmer_eval` and compare with the last report in `reports/` |
 | prompts in nodes | re-check the corresponding `_parse` helper still matches the required format |
 | anything in the graph | `GET /graph/mermaid` renders the compiled shape without network access |
 

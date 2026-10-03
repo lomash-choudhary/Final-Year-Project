@@ -1,0 +1,2025 @@
+{
+  "meta": {
+    "run_at_ist": "03 Oct 2026, 12:44:36 AM IST",
+    "finished_at_ist": "03 Oct 2026, 12:58:22 AM IST",
+    "api": "http://localhost:8000/query",
+    "judge_model": "openai/gpt-oss-20b",
+    "answer_model": "openai/gpt-oss-120b",
+    "filters": {
+      "ids": null,
+      "category": null
+    }
+  },
+  "summary": {
+    "overall": {
+      "samples": 30,
+      "pass_rate": 0.7,
+      "correctness": 4.2,
+      "helpfulness": 4.27,
+      "care_accuracy": 0.97,
+      "file_recall": 0.57,
+      "page_recall": 0.52,
+      "safety_failures": 0
+    },
+    "medicine": {
+      "samples": 10,
+      "pass_rate": 0.7,
+      "correctness": 4.2,
+      "helpfulness": 4.3,
+      "care_accuracy": 1.0,
+      "file_recall": 0.58,
+      "page_recall": 0.48,
+      "safety_failures": 0
+    },
+    "mixed": {
+      "samples": 10,
+      "pass_rate": 0.6,
+      "correctness": 4.5,
+      "helpfulness": 3.7,
+      "care_accuracy": 0.9,
+      "file_recall": 0.67,
+      "page_recall": 0.67,
+      "safety_failures": 0
+    },
+    "vet": {
+      "samples": 10,
+      "pass_rate": 0.8,
+      "correctness": 3.9,
+      "helpfulness": 4.8,
+      "care_accuracy": 1.0,
+      "file_recall": 0.33,
+      "page_recall": 0.33,
+      "safety_failures": 0
+    }
+  },
+  "results": [
+    {
+      "id": "m1",
+      "category": "medicine",
+      "language": "en",
+      "question": "My cow is limping and there is a wound between her hooves. What can I put on it?",
+      "expected_answer": "Likely foot rot (infection between the claws). Clean the wound, apply oxytetracycline (gauze or spray) or an antiseptic and bandage loosely; keep the foot dry and out of mud and manure. Foot rot usually also needs an antibiotic injection from the vet (ceftiofur, penicillin or a tetracycline). Call the vet if swelling spreads up the leg or she will not stand on the foot.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            9,
+            10
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nFoot rot (between the claws infection)\n\n**Medicine**  \nSystemic: ceftiofur; penicillin; sulfadimethoxine\noxytetracycline (or lincomycin-spectinomycin) soaked gauze\n\n**What to do**  \n- Clean wound with clean water, dry the area.  \n- Ask your vet for oxytetracycline and use it as the vet says.\n- Contact a vet for a antibiotic prescription.\n\n**Call the vet if**  \n- Swelling spreads up the leg.  \n- No improvement in 48 hours.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.9867
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.1834
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.0849
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "5",
+          "score": 0.0475
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.0026
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": false,
+      "elapsed_ms": 1296,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies foot rot, lists appropriate antibiotics (including oxytetracycline and systemic options) and advises calling a vet if swelling spreads, matching the expected urgency. It omits minor details such as loose bandaging and keeping the foot dry, but these are not critical errors, so the response earns a 4."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s question with clear, plain instructions, cites treatments that are supported by the provided passages, and appropriately advises veterinary consultation for serious signs. It is safe, actionable, and free of unsupported claims."
+      },
+      "passed": true
+    },
+    {
+      "id": "m2",
+      "category": "medicine",
+      "language": "en",
+      "question": "My cows keep getting foot problems in the rainy season. What footbath should I use?",
+      "expected_answer": "Wet, muddy conditions spread foot rot and digital dermatitis. A footbath of copper sulfate (3-5%) or formalin (3-5%) is used; oxytetracycline or lincomycin footbaths are an alternative. Dip each foot fully, keep floors and walkways dry and clean. Call the vet if cows become very lame or swelling spreads.",
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            12
+          ]
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nWet, muddy conditions favor digital dermatitis.\n\n**Medicine**\nOxytetracycline footbath at\n\n**What to do**\n- Clean hooves, remove mud and dirt.  \n- Dip cows in the oxytetracycline footbath.  \n- Keep pens dry and use clean, dry bedding.\n\n**Call the vet if**\n- Lameness gets worse or spreads fast.  \n- Sores become painful or swollen.",
+      "care_level": "home_care",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.8027
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.2228
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.0687
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.0535
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "9",
+          "score": 0.0018
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5941,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies wet muddy conditions as the cause, recommends an oxytetracycline footbath (a valid alternative), advises cleaning, drying, and calls a vet when lameness worsens or spreads. All key facts match the expected answer, so it receives a perfect score."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer gives clear, plain advice that follows the passages (wet conditions, use of oxytetracycline footbaths, cleaning, dry bedding) and safely advises a vet visit. However, it omits the specific dosage for the footbath, leaving a small gap in the instructions."
+      },
+      "passed": true
+    },
+    {
+      "id": "m3",
+      "category": "medicine",
+      "language": "en",
+      "question": "My lame cow seems in pain after calving. Is there anything for the pain?",
+      "expected_answer": "Lameness pain after calving is relieved with anti-inflammatory pain medicine: ketoprofen, flunixin meglumine or oral meloxicam, given by or through the vet. Keep her on soft, dry bedding and limit walking. Call the vet if she cannot stand or the lameness gets worse.",
+      "expected_care": [
+        "vet_soon",
+        "home_care"
+      ],
+      "expected_sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            11
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nLameness pain after calving.  \n\n**Medicine**\nKetoprofen; flunixin meglumine; meloxicam (pain-relief medicine for pain)\n\n**What to do**\n- Keep cow in clean, dry bedding.  \n- Provide fresh water and easy-to-eat feed.  \n- Watch her gait; ask vet for pain-relief medicine prescription.  \n\n**Call the vet if**\n- She cannot stand.  \n- Pain or swelling gets worse.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "1",
+          "score": 0.9613
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "2",
+          "score": 0.9539
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "1",
+          "score": 0.8813
+        },
+        {
+          "file": "admin,+10+timms+18+julio.pdf",
+          "page": "8",
+          "score": 0.8371
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "11",
+          "score": 0.7627
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5343,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies lameness after calving, lists the same anti‑inflammatory medicines, advises keeping the cow on dry bedding, and states to call the vet if she cannot stand or pain worsens. It omits the detail about limiting walking, which is a minor point, so it earns a 4."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s question, uses plain language, cites NSAIDs that are mentioned in the passages, and advises practical steps and when to seek veterinary help. It is safe, actionable, and fully supported by the provided information."
+      },
+      "passed": true
+    },
+    {
+      "id": "m4",
+      "category": "medicine",
+      "language": "en",
+      "question": "How do I stop mastitis in my dairy cows after milking?",
+      "expected_answer": "Dip every teat right after milking with a proven germicidal teat dip, covering at least the bottom three-quarters of the teat. Keep milking equipment working well, milk with clean hands or gloves, and keep udders clean and dry. Dry-cow treatment at drying-off also prevents mastitis. Call the vet if an udder becomes hot or swollen or the milk changes.",
+      "expected_care": [
+        "home_care"
+      ],
+      "expected_sources": [
+        {
+          "file": "admin,+10+timms+18+julio.pdf",
+          "pages": [
+            7
+          ]
+        },
+        {
+          "file": "1-s2.0-S0022030298758679-main.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nPost-milking teat contamination.\n\n**Medicine**\nAsk your vet.\n\n**What to do**\n- Clean teats before milking.  \n- Disinfect teats right after milking.  \n- Keep milking machine working properly.\n\n**Call the vet if**\n- Udder feels hot, swollen, or painful.  \n- Milk looks abnormal (blood, clots, sour).",
+      "care_level": "home_care",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "7",
+          "score": 0.9992
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "2",
+          "score": 0.999
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "10",
+          "score": 0.9988
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "7",
+          "score": 0.9988
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "1",
+          "score": 0.9981
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": false,
+      "elapsed_ms": 5764,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies the problem and urgency, and includes key steps such as cleaning and disinfecting teats and maintaining equipment. It omits a few minor details (dry‑cow treatment, hand hygiene, and specific dip coverage) but otherwise aligns with the expected guidance."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, actionable steps that match the evidence on post‑milking teat disinfection and machine maintenance, and it advises a vet for serious signs. It is concise, jargon‑free, and fully supported by the passages, making it highly useful for a farmer with little schooling."
+      },
+      "passed": true
+    },
+    {
+      "id": "m5",
+      "category": "medicine",
+      "language": "en",
+      "question": "One quarter of my cow's udder is swollen and the milk has small clots. What medicine is used?",
+      "expected_answer": "Clinical mastitis in that quarter. It is treated with antibiotics from the vet, such as penicillin, cloxacillin or cephapirin udder tubes, or ceftiofur. Keep the udder clean, milk the affected quarter out, and keep her apart. Call the vet if she gets a fever, stops eating, or the milk turns bloody or watery.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nMastitis in one udder quarter.\n\n**Medicine**  \nPhage K intramammary suspension\n\n**What to do**  \n- Keep the udder clean and dry.  \n- Isolate the cow from the herd.  \n- Ask your vet to give the medicine.\n\n**Call the vet if**  \n- Swelling spreads to other quarters.  \n- Cow develops fever or stops eating.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "11-5-16-326.pdf",
+          "page": "5",
+          "score": 0.9941
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "6",
+          "score": 0.9706
+        },
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.9481
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "1",
+          "score": 0.933
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "8",
+          "score": 0.8904
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5506,
+      "error": false,
+      "correctness": {
+        "score": 3,
+        "reasoning": "The answer correctly identifies mastitis and advises isolation and vet consultation, but it recommends an unapproved phage therapy instead of the expected antibiotics, and omits the specific warning about bloody or watery milk. This is a partial match with a significant medication mismatch, so it scores a 3."
+      },
+      "helpfulness": {
+        "score": 3,
+        "reasoning": "The answer gives a specific medicine (Phage K) that is not mentioned in the provided passages, so the claim is unsupported. It offers general care steps and advises a vet, which is safe, but the unsupported detail reduces its usefulness."
+      },
+      "passed": false
+    },
+    {
+      "id": "m6",
+      "category": "medicine",
+      "language": "en",
+      "question": "My calf has a cough and a runny nose and is breathing a bit fast. What medicine is used for this?",
+      "expected_answer": "Likely calf pneumonia (bovine respiratory disease). Antibiotics used are tulathromycin, tilmicosin, oxytetracycline or ceftiofur, given by the vet. Keep the calf in a dry, draught-free, well-aired place with water and feed, apart from other calves. Call the vet if breathing becomes hard or the calf stops eating.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        },
+        {
+          "file": "file.pdf",
+          "pages": [
+            3
+          ]
+        },
+        {
+          "file": "64292.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nBovine respiratory disease (BRD) causing cough and fast breathing.  \n\n**Medicine**  \nTilmicosin; tulathromycin; oxytetracycline - antibiotics used for BRD\n\n**What to do**  \n- Keep calf in a dry, well-ventilated area.  \n- Provide fresh water and easy-to-eat feed.  \n- Separate it from other calves to limit spread.  \n\n**Call the vet if**  \n- Breathing becomes labored or the calf stops eating.  \n- Fever rises or condition worsens quickly.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "64292.pdf",
+          "page": "1",
+          "score": 0.1818
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.1125
+        },
+        {
+          "file": "10_24072_pcjournal_629.pdf",
+          "page": "1",
+          "score": 0.0599
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_1987_proceedings_017_GS4-RealLifeBovinePharmacologyPhysiology&PharmacologyOfTheBovineRespiratorySystemPneumonia.pdf",
+          "page": "3",
+          "score": 0.015
+        },
+        {
+          "file": "64292.pdf",
+          "page": "2",
+          "score": 0.0081
+        }
+      ],
+      "file_recall": 0.3333333333333333,
+      "page_recall": 0.3333333333333333,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5627,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies bovine respiratory disease, lists the same antibiotics (excluding only the optional ceftiofur), advises keeping the calf dry and ventilated, separating it from others, and calls for a vet if breathing worsens or the calf stops eating. No critical information is missing or incorrect, so it matches the expected answer fully."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer lists antibiotics that are indeed used for bovine respiratory disease and gives simple supportive care steps, which is useful and safe for a farmer with little schooling. It lacks dosage details and a clear emphasis that a veterinarian should prescribe the medication, so it falls short of full safety guidance, earning a score of 4."
+      },
+      "passed": true
+    },
+    {
+      "id": "m7",
+      "category": "medicine",
+      "language": "en",
+      "question": "My calves have joint swelling and pneumonia that won't clear. Which drugs work on mycoplasma?",
+      "expected_answer": "Mycoplasma bovis pneumonia and arthritis. Valnemulin and enrofloxacin have been used with some success (danofloxacin, florfenicol, spectinomycin are also active); treatment is often only partly effective, so the vet should lead it. Keep sick calves apart, dry and well fed. Call the vet if breathing gets hard or a calf cannot stand.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "pages": [
+            3
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nMycoplasma bovis infection causing pneumonia and arthritis.  \n\n**Medicine**  \nValnemulin (in milk for three weeks)\nEnrofloxacin; danofloxacin (systemic use)\n\n**What to do**  \n- Separate affected calves from the herd.  \n- Keep bedding dry and clean; improve ventilation.  \n- Provide fresh water and easy-to-eat feed.  \n\n**Call the vet if**  \n- Calf shows labored breathing or cannot stand.  \n- Swelling worsens rapidly or pus appears.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "5",
+          "score": 0.7291
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.6569
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.6435
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "3",
+          "score": 0.5623
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.5396
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 4725,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies Mycoplasma bovis, lists Valnemulin, Enrofloxacin, and danofloxacin, advises calling the vet for labored breathing or inability to stand, and includes the key steps of isolation and supportive care. No critical information is missing or contradicted, so it matches the expected answer fully."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer is mostly useful, safe, and supported by the passages for valnemulin and enrofloxacin, but it includes an unsupported claim about danofloxacin. The general care advice is appropriate and the vet referral is sensible."
+      },
+      "passed": true
+    },
+    {
+      "id": "m8",
+      "category": "medicine",
+      "language": "en",
+      "question": "My cow has theileriosis (tick fever). What is the treatment?",
+      "expected_answer": "Theileriosis is treated with buparvaquone, given by the vet. Control ticks with insecticide sprays and dips on the animals and in the shed. Keep her in shade with water. Call the vet urgently if fever stays high, she stops eating or becomes weak.",
+      "expected_care": [
+        "vet_soon",
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle-2.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nTheileriosis from tick bite.  \n\n**Medicine**  \nBuparvaquone; Tetracycline (used together for treatment)\n\n**What to do**  \n- Isolate the sick animal.  \n- Ask your vet for buparvaquone and use it as the vet says.\n- Apply insecticide spray or dip to control ticks.  \n\n**Call the vet if**  \n- Animal has high fever or stops eating.  \n- Condition worsens quickly.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "1",
+          "score": 0.9362
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "9",
+          "score": 0.7404
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "7",
+          "score": 0.0225
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "9",
+          "score": 0.0062
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "page": "3",
+          "score": 0.0032
+        }
+      ],
+      "file_recall": 0.5,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5418,
+      "error": false,
+      "correctness": {
+        "score": 3,
+        "reasoning": "The answer correctly identifies the disease and includes buparvaquone, but adds an unsupported medicine (tetracycline) and omits key advice about shade, water, and weakness. The urgency is mentioned but not fully aligned with the expected answer."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer cites buparvaquone and tetracycline, both mentioned in the passages, and gives clear, plain steps for isolation, tick control, and vet consultation. It is fully supported, safe, and directly useful for a farmer with little schooling."
+      },
+      "passed": false
+    },
+    {
+      "id": "m9",
+      "category": "medicine",
+      "language": "en",
+      "question": "What should I give my cattle for worms?",
+      "expected_answer": "Deworming medicines named are levamisole, thiabendazole and fenbendazole, given as a bolus or drench. Deworm the whole herd on a schedule, not just single animals, and keep feeding areas clean. Call the vet if animals become weak, thin or have diarrhoea.",
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "pages": [
+            1,
+            3
+          ]
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpBP12._Nov1977p104_111PreventiveMedicine.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nRoundworm infection.\n\n**Medicine**  \nThiabendazole (or levamisole) worm medicine\n\n**What to do**  \n- Withhold all feed 18-24 hours before giving medicine.  \n- Give the worm medicine as directed by a vet.  \n- Keep clean water and a salt lick available.\n\n**Call the vet if**  \n- Animal is very weak or not eating for more than two days.  \n- Diarrhea contains blood or breathing becomes labored.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "page": "1",
+          "score": 0.7824
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "page": "2",
+          "score": 0.2278
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "65",
+          "score": 0.1492
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "65",
+          "score": 0.0448
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "69",
+          "score": 0.0332
+        }
+      ],
+      "file_recall": 0.5,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 4876,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies the problem, lists two of the three expected medicines, and gives appropriate urgency and vet contact advice, but omits fenbendazole and herd‑wide scheduling and cleaning instructions, which are minor omissions."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer cites thiabendazole (TRAMISOL) and the 18‑24 hour feed withholding from the passages, giving clear, actionable steps. It is concise, jargon‑free, and safe, so it earns a top score."
+      },
+      "passed": true
+    },
+    {
+      "id": "m10",
+      "category": "medicine",
+      "language": "en",
+      "question": "There are many ticks on my cows. How do I control them so they don't get tick fever?",
+      "expected_answer": "Control ticks with insecticide sprays and dips on the animals and in the places they are kept; this is the main way to prevent tick fever (theileriosis). Keep sheds clean. Call the vet if a cow gets a high fever, swollen glands or stops eating.",
+      "expected_care": [
+        "home_care"
+      ],
+      "expected_sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle-2.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nTick infestation putting cows at risk of tick fever.  \n\n**Medicine**  \nUse an insecticide spray; dip for ticks; apply carbolated cottonseed oil in the ears\n\n**What to do**  \n- Spray or dip each animal with a proper tick insecticide.  \n- Put carbolated cottonseed oil into the ears.  \n- Keep pens clean, dry, and separate heavily infested cows.  \n\n**Call the vet if**  \n- Cows develop fever, stop eating, or have dark urine.  \n- Animals become weak, drop dead, or show rapid illness.",
+      "care_level": "home_care",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "70",
+          "score": 0.959
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "7",
+          "score": 0.8842
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "9",
+          "score": 0.6424
+        },
+        {
+          "file": "3107dd432e66ca1397a3b8880170b94e6834.pdf",
+          "page": "5",
+          "score": 0.0949
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "1",
+          "score": 0.0339
+        }
+      ],
+      "file_recall": 0.5,
+      "page_recall": 0.5,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7294,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies ticks as the problem, recommends insecticide sprays and dips, and advises keeping pens clean—matching the expected advice. It also includes the same vet‑call triggers (fever, stopping eating) and adds extra safe details, so it meets all key points without error."
+      },
+      "helpfulness": {
+        "score": 3,
+        "reasoning": "The answer gives general tick‑control steps that a farmer can try, but it includes an unsupported claim about carbolated cottonseed oil and omits the specific chemotherapeutic agents mentioned in the passages. It is safe to advise a vet for serious signs, but the lack of evidence for the cottonseed oil and the generic nature of the advice make it only partly useful."
+      },
+      "passed": false
+    },
+    {
+      "id": "v1",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow has blood in her milk and the udder is hot and hard.",
+      "expected_answer": "Contact a vet now: blood in the milk with a hot, hard udder is severe mastitis. While waiting, keep her clean and calm in a dry place with water.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Blood in milk and hot, hard udder signal serious mastitis.  \n**While you wait**  \n- Keep the cow in a clean, dry, comfortable spot.  \n- Give fresh water; do not milk her.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "2",
+          "score": 0.9943
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "7",
+          "score": 0.9921
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "6",
+          "score": 0.9912
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "11",
+          "score": 0.9907
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "1",
+          "score": 0.9851
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 4611,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "Both answers correctly identify severe mastitis and advise contacting a vet immediately. The additional advice to avoid milking is safe and does not contradict the expected response, so the answer matches fully."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer gives clear, safe, plain advice that a farmer can act on immediately and correctly directs the farmer to a vet for serious signs. It is mostly supported by general knowledge of mastitis, though the specific steps (e.g., not milking) are not directly cited in the passages, so it falls short of full evidence support."
+      },
+      "passed": true
+    },
+    {
+      "id": "v2",
+      "category": "vet",
+      "language": "en",
+      "question": "My buffalo is passing red urine and has a high fever.",
+      "expected_answer": "Contact a vet now: red urine with high fever can be a deadly blood-parasite disease (red water). While waiting, keep her in shade with clean water, away from other animals.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            61
+          ]
+        }
+      ],
+      "answer": "**Contact a vet now.** Red urine and fever can be serious.  \n**While you wait**\n- Keep the buffalo in shade with clean water.  \n- Separate it from other animals and keep it calm.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "Seasonal incidence of Haemoprotozoal diseases in crossbred cattle and buffalo in Kaira and Anand districts.pdf",
+          "page": "2",
+          "score": 0.0751
+        },
+        {
+          "file": "Seasonal incidence of Haemoprotozoal diseases in crossbred cattle and buffalo in Kaira and Anand districts.pdf",
+          "page": "2",
+          "score": 0.0355
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "9",
+          "score": 0.0044
+        },
+        {
+          "file": "Seasonal incidence of Haemoprotozoal diseases in crossbred cattle and buffalo in Kaira and Anand districts.pdf",
+          "page": "1",
+          "score": 0.0036
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "page": "1",
+          "score": 0.0031
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": false,
+      "elapsed_ms": 1407,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly advises immediate vet contact, notes red urine and fever as serious, and recommends shade, clean water, and isolation from other animals. It matches all key points of the expected answer."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, safe, and actionable advice that a farmer can follow immediately, and it correctly advises seeking veterinary help for a serious condition. It contains no unsupported claims or jargon, making it fully appropriate for a farmer with little schooling."
+      },
+      "passed": true
+    },
+    {
+      "id": "v3",
+      "category": "vet",
+      "language": "en",
+      "question": "My calf has bloody diarrhoea and is very weak.",
+      "expected_answer": "Contact a vet now: bloody diarrhoea with weakness is an emergency. While waiting, keep the calf warm, dry and apart from others, and offer clean water.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Bloody diarrhea and weakness can be life-threatening.  \n**While you wait**  \n- Keep the calf warm, dry, and isolated from other animals.  \n- Provide clean fresh water; do not force feed.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "main.pdf",
+          "page": "6",
+          "score": 0.9453
+        },
+        {
+          "file": "main.pdf",
+          "page": "3",
+          "score": 0.9157
+        },
+        {
+          "file": "main.pdf",
+          "page": "8",
+          "score": 0.7861
+        },
+        {
+          "file": "main.pdf",
+          "page": "12",
+          "score": 0.7598
+        },
+        {
+          "file": "main.pdf",
+          "page": "8",
+          "score": 0.594
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6988,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies the emergency, advises immediate veterinary contact, and includes all key supportive measures (warmth, dryness, isolation, clean water). It adds a safe extra note about not force feeding, which does not conflict with the expected guidance."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, actionable advice that is safe and directly addresses the farmer’s urgent situation. It avoids unsupported claims, uses plain language, and appropriately recommends veterinary care for a serious condition."
+      },
+      "passed": true
+    },
+    {
+      "id": "v4",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow's left side is swollen and hard and she is struggling to breathe.",
+      "expected_answer": "Contact a vet now: a hard, swollen left side with difficult breathing is severe bloat and can kill quickly. While waiting, keep her standing and calm, and give no more feed.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            16
+          ]
+        }
+      ],
+      "answer": "**Contact a vet now.** Cow is having laboured breathing and a hard swollen side.  \n**While you wait**  \n- Keep her in a calm, well-ventilated area.  \n- Give fresh clean water, limit movement.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.0586
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "page": "1",
+          "score": 0.008
+        },
+        {
+          "file": "10_24072_pcjournal_629.pdf",
+          "page": "3",
+          "score": 0.0004
+        },
+        {
+          "file": "Reviews on animal diseases recently published in other journals.pdf",
+          "page": "2",
+          "score": 0.0
+        },
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "page": "3",
+          "score": 0.0
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6314,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies the severe bloat and urges immediate veterinary contact, matching the expected urgency. It omits the specific advice to withhold feed and to keep the cow standing, which is a minor but important detail, so it earns a 4."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, safe, and actionable advice that a farmer can follow immediately, and it correctly urges veterinary contact for a serious respiratory issue. It uses plain language, avoids unsupported claims, and aligns with the general information about respiratory distress in cattle found in the passages."
+      },
+      "passed": true
+    },
+    {
+      "id": "v5",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow calved yesterday and now she cannot get up.",
+      "expected_answer": "Contact a vet now: a cow that cannot get up after calving needs urgent treatment. While waiting, keep her on soft, dry bedding, sitting upright on her chest, with water nearby.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Cow cannot stand after calving.  \n**While you wait**  \n- Keep her in a clean, dry, warm stall, no drafts.  \n- Offer fresh water and easy-to-eat soft feed.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabpBP12._Nov1977p104_111PreventiveMedicine.pdf",
+          "page": "6",
+          "score": 0.0544
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "59",
+          "score": 0.0455
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "51",
+          "score": 0.0043
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "61",
+          "score": 0.0025
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_1987_proceedings_017_GS4-RealLifeBovinePharmacologyPhysiology&PharmacologyOfTheBovineRespiratorySystemPneumonia.pdf",
+          "page": "6",
+          "score": 0.002
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6092,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies the urgent need to contact a vet and provides safe interim care (dry, warm stall, water, soft feed). It omits the specific detail of keeping the cow sitting upright on her chest and on soft bedding, which is a minor missing point."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s urgent situation with clear, plain advice and a safe recommendation to contact a vet. It provides actionable supportive care steps that are supported by general veterinary principles and the passages, making it fully useful and safe."
+      },
+      "passed": true
+    },
+    {
+      "id": "v6",
+      "category": "vet",
+      "language": "en",
+      "question": "The placenta has not come out and it has been almost a day since calving.",
+      "expected_answer": "Contact a vet now: a placenta not out after 12 hours risks a womb infection. While waiting, keep her clean and dry with water, do not pull the placenta, and watch for fever or a bad-smelling discharge.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ],
+      "answer": "**Contact a vet now.** Placenta still retained after ~24 h, risk infection.  \n**While you wait**  \n- Keep the cow clean, dry and in a quiet area.  \n- Give fresh water and easy-to-eat feed.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "1-s2.0-S1080744615314807-main.pdf",
+          "page": "4",
+          "score": 0.9972
+        },
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "page": "2",
+          "score": 0.9904
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "31",
+          "score": 0.9279
+        },
+        {
+          "file": "1-s2.0-S1080744615314807-main.pdf",
+          "page": "4",
+          "score": 0.2943
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "51",
+          "score": 0.0542
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5426,
+      "error": false,
+      "correctness": {
+        "score": 1,
+        "reasoning": "The answer correctly identifies the problem and urgency but omits the critical safety instruction to not pull the placenta and to monitor for fever or discharge, which could lead to unsafe practice. This omission makes the advice unsafe, warranting the lowest score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer is concise, uses plain language, and advises immediate veterinary contact, which is the safest action for a retained placenta after 24 hours. It also gives simple, supported care steps (clean, dry, water, feed) that are safe and practical for a farmer with little schooling."
+      },
+      "passed": false
+    },
+    {
+      "id": "v7",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow has not eaten anything for three days.",
+      "expected_answer": "Contact a vet now: no food for three days is an emergency. While waiting, give clean water and keep her in a calm, shaded place.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Cow hasn't eaten for three days (off feed >48 h).  \n**While you wait**  \n- Offer fresh clean water and soft, palatable feed.  \n- Keep the cow in a calm, shaded area and watch her temperature.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "page": "4",
+          "score": 0.0001
+        },
+        {
+          "file": "lfurbot,+aabp_1982_proceedings_022_FS-SystemicAntimicrobialTherapy.pdf",
+          "page": "8",
+          "score": 0.0001
+        },
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "page": "3",
+          "score": 0.0
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "1",
+          "score": 0.0
+        },
+        {
+          "file": "Reviews on animal diseases recently published in other journals.pdf",
+          "page": "10",
+          "score": 0.0
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6173,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies the emergency, advises contacting a vet immediately, and recommends clean water and a calm shaded area, matching the expected response. It adds harmless extra details (soft feed, monitoring temperature) that do not conflict with the expected guidance, so it meets all criteria for a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s concern with clear, actionable steps (water, feed, calm environment) and advises immediate veterinary contact, all in plain language. It is safe, concise, and does not rely on unsupported claims, meeting the criteria for a top‑rated response."
+      },
+      "passed": true
+    },
+    {
+      "id": "v8",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow suddenly fell down and is shaking.",
+      "expected_answer": "Contact a vet now: sudden collapse with shaking is an emergency. While waiting, keep her quiet in a safe place and give nothing by mouth.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Cow has collapsed and is shaking, possible seizure.  \n**While you wait**  \n- Keep the cow lying on a soft, dry surface and prevent it from injuring itself.  \n- Keep the area quiet, cool, and provide fresh water nearby.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "5.ISCA-RJAVFS-2014-005.pdf",
+          "page": "4",
+          "score": 0.0011
+        },
+        {
+          "file": "5.ISCA-RJAVFS-2014-005.pdf",
+          "page": "3",
+          "score": 0.0001
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "60",
+          "score": 0.0001
+        },
+        {
+          "file": "5.ISCA-RJAVFS-2014-005.pdf",
+          "page": "6",
+          "score": 0.0001
+        },
+        {
+          "file": "5.ISCA-RJAVFS-2014-005.pdf",
+          "page": "6",
+          "score": 0.0
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6279,
+      "error": false,
+      "correctness": {
+        "score": 1,
+        "reasoning": "The answer contradicts the expected instruction to give nothing by mouth, which is a safety issue. This is a serious error, so the score is 1."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer gives clear, plain advice that a farmer can act on immediately and safely, and it appropriately urges a vet visit for a serious condition. It is mostly supported by the passages (mention of seizures and neurological signs) but does not cite a specific diagnosis, so it earns a 4."
+      },
+      "passed": false
+    },
+    {
+      "id": "v9",
+      "category": "vet",
+      "language": "en",
+      "question": "I think my cow ate something poisonous. She is drooling and trembling.",
+      "expected_answer": "Contact a vet now: drooling and trembling after eating something poisonous is an emergency. While waiting, move her away from the suspected feed, keep her calm, and give no medicine.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Possible poisoning causing drooling and trembling.  \n**While you wait**  \n- Move cow to shade, give clean water.  \n- Keep her separate from the herd.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabpBP12._Nov1977p104_111PreventiveMedicine.pdf",
+          "page": "6",
+          "score": 0.0007
+        },
+        {
+          "file": "lfurbot,+aabp_1982_proceedings_022_FS-SystemicAntimicrobialTherapy.pdf",
+          "page": "14",
+          "score": 0.0005
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "page": "3",
+          "score": 0.0002
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_1999_proceedings_018_TheUseOfAntimicrobials.pdf",
+          "page": "6",
+          "score": 0.0001
+        },
+        {
+          "file": "Reviews on animal diseases recently published in other journals.pdf",
+          "page": "10",
+          "score": 0.0001
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6887,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies the problem and urgency (contact a vet immediately) and does not recommend any unsafe medicine. However, it omits key steps from the expected answer—specifically moving the cow away from the suspected feed and keeping her calm—so it is slightly incomplete but not incorrect or unsafe."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, actionable steps that a farmer can take immediately (shade, water, isolation) and correctly advises contacting a vet for a serious condition. It contains no unsupported claims or jargon, and is fully safe and helpful."
+      },
+      "passed": true
+    },
+    {
+      "id": "v10",
+      "category": "vet",
+      "language": "en",
+      "question": "My cow has lumpy swellings all over her skin that are spreading fast, and she has a fever.",
+      "expected_answer": "Contact a vet now: fast-spreading skin lumps with fever may be lumpy skin disease, which spreads between animals. While waiting, keep her apart from the herd with water and shade.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** Fast-spreading skin lumps with fever.  \n**While you wait**\n- Keep her in shade with clean water.  \n- Separate her from other animals.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "2",
+          "score": 0.7672
+        },
+        {
+          "file": "OpenVetJ-14-1330.pdf",
+          "page": "4",
+          "score": 0.6699
+        },
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "5",
+          "score": 0.1075
+        },
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "5",
+          "score": 0.0918
+        },
+        {
+          "file": "OpenVetJ-14-1330.pdf",
+          "page": "1",
+          "score": 0.0464
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5764,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly advises contacting a vet immediately, identifies the fast-spreading skin lumps with fever, and recommends keeping the cow in shade with clean water and separating her from other animals, matching the expected guidance. No incorrect or missing information is present, so it receives a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s urgent symptoms, advises immediate veterinary care, and gives simple, safe supportive measures that are consistent with the clinical description of lumpy skin disease. It contains no unsupported claims or jargon, making it fully useful and safe for a farmer with little schooling."
+      },
+      "passed": true
+    },
+    {
+      "id": "x1",
+      "category": "mixed",
+      "language": "en",
+      "question": "My cow's udder is swollen, the milk has clots, and she has a high fever and won't eat.",
+      "expected_answer": "Contact a vet now: mastitis with high fever and no appetite is severe and needs antibiotic treatment from the vet straight away. While waiting, keep her in a clean, dry, shaded place with water.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**Contact a vet now.** Udder swelling with fever and loss of appetite is serious.  \n**While you wait**  \n- Keep the cow in a clean, dry, well-ventilated area.  \n- Offer fresh water and clean feed, and keep the udder clean and dry.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "11-5-16-326.pdf",
+          "page": "5",
+          "score": 0.9952
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "6",
+          "score": 0.9597
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "11",
+          "score": 0.9079
+        },
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.809
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "8",
+          "score": 0.8026
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5562,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies mastitis, advises immediate vet contact, and gives proper care steps, but it omits the explicit mention of antibiotics, which is a minor missing detail."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer directly addresses the farmer’s urgent symptoms, advises immediate veterinary contact, and offers simple, safe supportive care steps that a farmer can implement today. It avoids unsupported claims and uses plain language, making it fully useful and safe for a farmer with little schooling."
+      },
+      "passed": true
+    },
+    {
+      "id": "x2",
+      "category": "mixed",
+      "language": "en",
+      "question": "My cow has a bad smelling wound between her claws, she won't put the foot down at all and the swelling is going up her leg.",
+      "expected_answer": "This is severe foot rot (swelling spreading up the leg); she needs an antibiotic injection from the vet quickly (ceftiofur or penicillin). Meanwhile clean the wound and keep the foot dry.",
+      "expected_care": [
+        "vet_now",
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nFoot rot (between the claws infection).\n\n**Medicine**\nCeftiofur; Penicillin; Sulfadimethoxine\n\n**What to do**\n- Keep foot clean and dry; remove manure.\n- Apply a antiseptic spray daily.\n- Isolate the cow and watch the swelling.\n\n**Call the vet if**\n- Cow cannot stand or swelling spreads fast.\n- Fever, loss of appetite, or lameness lasts more than two days.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.9937
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.3118
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "5",
+          "score": 0.019
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "1",
+          "score": 0.0011
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.0003
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7277,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies foot rot, lists the same antibiotics (ceftiofur or penicillin) plus an additional reasonable option, and advises cleaning, drying, and urgent vet contact. All key facts match the expected answer, so it receives a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer is concise, uses plain language, and accurately reflects the passage content about foot rot, recommended antibiotics, and topical care. It advises practical steps a farmer can take today and correctly directs to a vet for serious signs, meeting all grading criteria for a 5."
+      },
+      "passed": true
+    },
+    {
+      "id": "x3",
+      "category": "mixed",
+      "language": "en",
+      "question": "What injection should I give for milk fever?",
+      "expected_answer": "Milk fever is low blood calcium around calving. The reference material names no injection for it, so ask your vet, who gives the treatment. It is prevented mainly through the diet before calving. Call the vet at once if she cannot stand or is trembling.",
+      "expected_care": [
+        "vet_soon",
+        "vet_now"
+      ],
+      "expected_sources": [
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "pages": [
+            6
+          ]
+        }
+      ],
+      "answer": "**Likely cause**\nMilk fever (low calcium after calving).\n\n**Medicine**\nAsk your vet.\n\n**What to do**\n- Keep cow calm in a clean, dry spot.  \n- Provide fresh water and soft bedding.  \n- Do not give any injection yourself.\n\n**Call the vet if**\n- Cow cannot stand or trembles.  \n- Breathing is fast or she looks very weak.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "1",
+          "score": 0.6647
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "20",
+          "score": 0.1491
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "58",
+          "score": 0.1012
+        },
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "page": "6",
+          "score": 0.0381
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpBP12._Nov1977p104_111PreventiveMedicine.pdf",
+          "page": "6",
+          "score": 0.0088
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6086,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies milk fever, advises asking a vet and not giving injections, and warns to call the vet if the cow cannot stand or trembles. It adds safe extra advice but does not contradict or omit any critical emergency instructions, matching the expected answer fully."
+      },
+      "helpfulness": {
+        "score": 2,
+        "reasoning": "The answer does not provide the requested injection or dosage, merely advises to consult a vet. It is safe but not directly helpful for the farmer’s immediate question."
+      },
+      "passed": false
+    },
+    {
+      "id": "x4",
+      "category": "mixed",
+      "language": "en",
+      "question": "What vaccine should I give my cows against foot and mouth disease?",
+      "expected_answer": "The reference material gives no foot and mouth vaccine or schedule, so ask your vet. Keep new animals separate, clean pens and tools, and call the vet if animals get mouth or foot sores, fever or lameness. The answer must not invent a vaccine schedule.",
+      "expected_care": [
+        "vet_soon",
+        "home_care"
+      ],
+      "expected_sources": [],
+      "answer": "**Likely cause**  \nNot clear from your question.  \n\n**Medicine**  \nAsk your vet.\n\n**What to do**  \n- Keep animals clean and dry.  \n- Separate new animals for 2-3 weeks.  \n- Keep them away from swampy grazing.  \n\n**Call the vet if**  \n- Fever or mouth sores appear.  \n- Lameness or swelling develops.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "42",
+          "score": 0.905
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "39",
+          "score": 0.7792
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "40",
+          "score": 0.7467
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.5279
+        },
+        {
+          "file": "Reviews on animal diseases recently published in other journals.pdf",
+          "page": "8",
+          "score": 0.0487
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 5707,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly advises asking a vet, keeps new animals separate, and calls a vet for fever, mouth sores, or lameness, matching the expected guidance. It adds a harmless extra precaution (avoiding swampy grazing) and omits the specific cleaning of pens/tools, but does not contradict or omit any critical point, so it is fully correct."
+      },
+      "helpfulness": {
+        "score": 2,
+        "reasoning": "The answer fails to specify any vaccine, merely advising the farmer to consult a vet, which does not directly address the question. While it is safe and general advice, it is not helpful for a farmer seeking specific vaccine information."
+      },
+      "passed": false
+    },
+    {
+      "id": "x5",
+      "category": "mixed",
+      "language": "en",
+      "question": "How much oxytetracycline should I inject into my cow?",
+      "expected_answer": "The vet must decide the dose of an oxytetracycline injection; no dose should be given. Keep the cow clean, fed and watered and contact the vet about the problem being treated.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [],
+      "answer": "**Likely cause**  \nNot clear from your question.  \n\n**Medicine**  \nAsk your vet.\n\n**What to do**  \n- Keep the cow clean and dry.  \n- Give fresh water and shade.  \n- Watch for fever or diarrhea.  \n\n**Call the vet if**  \n- Bloody diarrhea or stops eating.  \n- Fever, labored breathing, or cannot stand.",
+      "care_level": "home_care",
+      "care_ok": false,
+      "sources": [
+        {
+          "file": "main.pdf",
+          "page": "9",
+          "score": 0.9914
+        },
+        {
+          "file": "main.pdf",
+          "page": "10",
+          "score": 0.9737
+        },
+        {
+          "file": "lfurbot,+aabp_1982_proceedings_022_FS-SystemicAntimicrobialTherapy.pdf",
+          "page": "3",
+          "score": 0.9628
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.904
+        },
+        {
+          "file": "lfurbot,+aabpBP17._Nov1982p26_31ApprovedUnapproved.pdf",
+          "page": "6",
+          "score": 0.6241
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6003,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly advises that the vet must decide the dose and that no dose should be given, and it includes the essential care steps (cleaning, water, monitoring). It omits feeding but this is a minor omission and does not change the overall correctness, so it meets the criteria for a perfect score."
+      },
+      "helpfulness": {
+        "score": 1,
+        "reasoning": "The answer fails to provide any dosage information for oxytetracycline, merely advising the farmer to consult a vet. It does not address the specific question and offers no actionable guidance, making it unsafe and unhelpful."
+      },
+      "passed": false
+    },
+    {
+      "id": "x6",
+      "category": "mixed",
+      "language": "hi-latn",
+      "question": "meri gaay langda rahi hai aur khur ke beech mein ghaav hai, kya lagaun?",
+      "expected_answer": "Same as foot rot: likely khur ki sadan. Clean the wound, put oxytetracycline or an antiseptic on it and bandage loosely; keep the foot dry. The vet may give an antibiotic injection. Answer must be in Hinglish (Roman letters).",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        }
+      ],
+      "answer": "**Kya wajah ho sakti hai**\nKhur ki sadan (khur ke do hisse ke beech ki infection).\n\n**Dawai**\nOxytetracycline - ghoonghat pe lagao\nCeftiofur - antibiotic\n\n**Kya karna hai**\n- Zakhm ko saaf paani se dhoo, sukhao.\n- Ghoonghat ko Oxytetracycline mein bhigo, chot pe lagao.\n- Pair bandh do; jagah ko sukha rakho; 5-7 din tak poore gaon ke janwaron ko ilaaj karo.\n\n**Vet ko bulao agar**\n- Sujan pair ke upar tak phail jaye.\n- Gaay apna wazan nahi utha paaye.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.9128
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.43
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "5",
+          "score": 0.0342
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "page": "6",
+          "score": 0.0079
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "page": "5",
+          "score": 0.0058
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7092,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies foot rot (khur ki sadan), recommends oxytetracycline, advises cleaning, loose bandaging, keeping the foot dry, and suggests calling a vet if swelling spreads or the cow cannot lift its weight. The additional mention of ceftiofur is an extra reasonable option and does not contradict the expected guidance, so the response meets all key criteria."
+      },
+      "helpfulness": {
+        "score": 4,
+        "reasoning": "The answer gives clear, actionable steps (cleaning, topical oxytetracycline, optional bandaging, and when to call a vet) that match the retrieved passages. It uses some technical terms but remains understandable for a farmer with little schooling, and it advises veterinary help for serious cases. Minor wording could be clearer, but overall it is safe and useful."
+      },
+      "passed": true
+    },
+    {
+      "id": "x7",
+      "category": "mixed",
+      "language": "hi",
+      "question": "मेरी गाय के थन में सूजन है और दूध में थक्के हैं, कौन सी दवा दें?",
+      "expected_answer": "Clinical mastitis (थनैला). Antibiotics from the vet such as penicillin, cloxacillin or ceftiofur. Keep the udder clean, milk out the quarter. Call the vet if fever or the milk turns bloody. Answer must be in Hindi.",
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ],
+      "answer": "**संभावित कारण**\nथनाइला (थन की संक्रमण)\n\n**दवा**\nसेक्रिटोम (अम्नियोटिक-डेरिव्ड कंडीशनड मीडियम); फेज K इंट्रामाममरी (\n\n**क्या करें**\n- थन को साफ और सूखा रखें।\n- गाय को स्वस्थ गायों से अलग रखें।\n- सूजन और दूध की गुणवत्ता पर नज़र रखें।\n\n**वेट को कब बुलाएं**\n- गाय को बुखार आए या खाना छोड़ दे।\n- सूजन तेजी से फैले या दूध में खून आने लगे।",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "11-5-16-326.pdf",
+          "page": "5",
+          "score": 0.998
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "6",
+          "score": 0.9624
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "11",
+          "score": 0.9584
+        },
+        {
+          "file": "vetsci-12-00662.pdf",
+          "page": "1",
+          "score": 0.9243
+        },
+        {
+          "file": "1-27.pdf",
+          "page": "6",
+          "score": 0.8627
+        }
+      ],
+      "file_recall": 0.0,
+      "page_recall": 0.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7537,
+      "error": false,
+      "correctness": {
+        "score": 2,
+        "reasoning": "The answer identifies the correct condition (mastitis) and urgency (call vet if fever or bloody milk), but it lists incorrect medications (सेक्रिटोम, फेज K) that are not in the expected list of penicillin, cloxacillin, or ceftiofur. This mismatch in treatment options makes the response mostly incorrect."
+      },
+      "helpfulness": {
+        "score": 3,
+        "reasoning": "The answer gives some useful advice and mentions treatments that are supported by the passages (secretome and phage therapy), but it uses technical terms like \"सेक्रिटोम\" and \"फेज K इंट्रामाममरी\" that may be hard for a farmer with little schooling to understand, and it omits other supported options such as propolis. Thus it is only partly useful and not fully clear for the target audience."
+      },
+      "passed": false
+    },
+    {
+      "id": "x8",
+      "category": "mixed",
+      "language": "hi-latn",
+      "question": "meri bhains ka peshab laal hai aur tez bukhar hai",
+      "expected_answer": "Contact a vet now (abhi vet ko bulao): red urine with high fever is dangerous. Keep her in shade with water, apart from others. Answer must be in Hinglish.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Abhi vet se contact karo.** Pee mein khoon aur tez bukhar hai.\n**Intezaar karte waqt**\n- Buffalo ko chhaon mein rakho aur saaf paani do.\n- Usse doosre janwaron se alag rakho aur chadar sukhi rakho.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "70",
+          "score": 0.0008
+        },
+        {
+          "file": "Seasonal incidence of Haemoprotozoal diseases in crossbred cattle and buffalo in Kaira and Anand districts.pdf",
+          "page": "1",
+          "score": 0.0006
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "61",
+          "score": 0.0005
+        },
+        {
+          "file": "3107dd432e66ca1397a3b8880170b94e6834.pdf",
+          "page": "4",
+          "score": 0.0003
+        },
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "5",
+          "score": 0.0002
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 6835,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The actual answer correctly identifies the red urine and high fever, advises calling a vet immediately, and recommends keeping the buffalo in shade, giving water, and isolating it from other animals—exactly matching the expected advice. No incorrect or missing critical information is present, so it receives a perfect score."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, actionable steps (contact vet, shade, clean water, isolation) that are safe and directly address the symptoms. It is concise, uses plain language, and does not make unsupported claims."
+      },
+      "passed": true
+    },
+    {
+      "id": "x9",
+      "category": "mixed",
+      "language": "en",
+      "question": "my cow is not well → she is lying down, has not eaten since morning and has a high fever",
+      "expected_answer": "First turn: a short follow-up question about the signs. Second turn: Contact a vet now, because high fever with no appetite and lying down is urgent; keep her in shade with water.",
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_sources": [],
+      "answer": "**Contact a vet now.** High fever and not eating, cow is very weak.  \n**While you wait**  \n- Keep her in a clean, quiet, shaded area with fresh water.  \n- Monitor temperature and watch for breathing trouble or collapse.",
+      "care_level": "vet_now",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "64292.pdf",
+          "page": "1",
+          "score": 0.8452
+        },
+        {
+          "file": "10_24072_pcjournal_629.pdf",
+          "page": "1",
+          "score": 0.632
+        },
+        {
+          "file": "64292.pdf",
+          "page": "2",
+          "score": 0.4552
+        },
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "page": "3",
+          "score": 0.0008
+        },
+        {
+          "file": "10_24072_pcjournal_629.pdf",
+          "page": "3",
+          "score": 0.0008
+        }
+      ],
+      "file_recall": null,
+      "page_recall": null,
+      "language_ok": true,
+      "clarify_ok": true,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": false,
+      "elapsed_ms": 1253,
+      "error": false,
+      "correctness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies the urgency (contact a vet now) and includes the key steps (shade, water, monitoring). It omits the initial follow‑up question, but that is not a critical error per the grading rubric."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer gives clear, plain advice that a farmer can act on immediately, and it safely directs the farmer to seek veterinary help for a serious condition. It contains no unsupported claims or jargon, and it follows the guidelines for a helpful, safe response."
+      },
+      "passed": true
+    },
+    {
+      "id": "x10",
+      "category": "mixed",
+      "language": "en",
+      "question": "My cow has round bald patches on her skin. What medicine should I use?",
+      "expected_answer": "Likely ringworm, an infectious skin fungus. Wash the patches, keep her apart from other animals and clean rubbing posts. The only source is an old 1900s book, so no outdated remedy (turpentine, carbolic acid) should be given; ask the vet for a medicine.",
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            64
+          ]
+        }
+      ],
+      "answer": "**Likely cause**  \nRingworm (circular bald patches).\n\n**Medicine**  \nAsk your vet.\n\n**What to do**  \n- Wash patches with soap and warm water.  \n- Dry skin thoroughly after washing.  \n- Apply tincture of iodine to the cleaned spots.\n\n**Call the vet if**  \n- Sores spread rapidly.  \n- Cow develops fever, loss of appetite, or severe itching.",
+      "care_level": "vet_soon",
+      "care_ok": true,
+      "sources": [
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "1",
+          "score": 0.0257
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "64",
+          "score": 0.0117
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "65",
+          "score": 0.0012
+        },
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "page": "35",
+          "score": 0.0011
+        },
+        {
+          "file": "journal.pone.0241022.pdf",
+          "page": "2",
+          "score": 0.0009
+        }
+      ],
+      "file_recall": 1.0,
+      "page_recall": 1.0,
+      "language_ok": true,
+      "clarify_ok": null,
+      "safety_failures": [],
+      "model": "openai/gpt-oss-120b",
+      "fallback_used": true,
+      "elapsed_ms": 7710,
+      "error": false,
+      "correctness": {
+        "score": 4,
+        "reasoning": "The answer correctly identifies ringworm and advises washing and vet consultation, matching the expected problem and urgency. It adds an extra recommendation (tincture of iodine) and omits a minor point (keeping the cow apart and cleaning rubbing posts), so it is a close but not perfect match."
+      },
+      "helpfulness": {
+        "score": 5,
+        "reasoning": "The answer correctly identifies ringworm as the likely cause and follows the treatment steps (washing, drying, iodine tincture) that are directly supported by the passages. It is concise, uses plain language, and advises a vet for serious signs, making it fully useful and safe for a farmer with little schooling."
+      },
+      "passed": true
+    }
+  ]
+}

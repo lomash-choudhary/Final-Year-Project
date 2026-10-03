@@ -193,6 +193,9 @@ class Settings:
     # ── UI / evals ────────────────────────────────────────────────────────────
     BACKEND_URL: str = field(default_factory=lambda: _str("BACKEND_URL", "http://localhost:8000"))
     JUDGE_GROQ: str = field(default_factory=lambda: _str("JUDGE_GROQ"))
+    # Dedicated Groq key for the LLM-as-judge evals (`evals.farmer_eval`), so an eval
+    # run never spends the quota the live app answers with. Preferred over JUDGE_GROQ.
+    GROQ_EVALS_API_KEY: str = field(default_factory=lambda: _str("GROQ_EVALS_API_KEY"))
     # RAGAS judge. Blank falls back to GROQ_FAST_MODEL: judging is a cheap,
     # mechanical call and the 70B quota is needed by the live app.
     JUDGE_MODEL: str = field(default_factory=lambda: _str("JUDGE_MODEL"))
@@ -219,8 +222,8 @@ class Settings:
 
     @property
     def judge_api_key(self) -> str:
-        """Eval judge key, falling back to the main Groq key."""
-        return self.JUDGE_GROQ or self.GROQ_API_KEY
+        """Eval judge key: the dedicated evals key, then JUDGE_GROQ, then the main Groq key."""
+        return self.GROQ_EVALS_API_KEY or self.JUDGE_GROQ or self.GROQ_API_KEY
 
     @property
     def judge_model(self) -> str:

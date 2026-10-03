@@ -143,6 +143,12 @@ Last reviewed: 2026-10-03.
 - **Translation runs on `qwen/qwen3.8-27b` (fast tier)**; Hindi wording is the weakest part (a farm
   glossary in the prompt fixed "bachhde" → "child" and mastitis → "मामा"). Moving `translate_out` to
   the quality tier is the next lever if quality matters more than 120B quota.
+- **Farmer eval not yet re-run cleanly at full size** (2026-10-03). Last complete run 70%
+  (`reports/farmer_eval_2026-10-03_00-44-36_IST`), then 80% (00-58-30, 3 API timeouts). Fixes since:
+  experimental-passage retrieval filter, old-book context drop, code red flags, judge rubric,
+  dataset corrections; targeted reruns passed m6/m7/m10/x7. The final full run was stopped at 15/30
+  (all passing except m9 worms, correctness 3) when the judge hit gpt-oss-20b's **200k tokens/day**
+  cap. Owner's target: ≥95% pass. Next: rerun after the quota resets; check m9.
 - **No automated tests and no CI.** Worth adding if the project continues past submission —
   guardrail regexes and the `_parse` helpers are the highest-value targets.
 
@@ -221,3 +227,19 @@ One dated line per session, newest last: what was done, what is left.
   Blocker noted: /query hides sources for symptom intent, so evals need a debug flag. No code change.
 - 2026-10-03 — Eval metrics agreed in discussion: judge-based Correctness + Helpfulness, deterministic
   source recall, safety gates (care level, dose) in code. No code change.
+- 2026-10-03 — Built farmer eval: `evals/farmer_dataset.json` (30 samples, expected answer + page-level
+  sources verified in processed_data/), `evals/farmer_eval.py` (judge correctness + helpfulness, code
+  source recall, care accuracy, safety gates; IST reports in reports/). `/query` gained eval-only
+  `include_sources`; `GROQ_EVALS_API_KEY` added; `.env` JUDGE_MODEL set to openai/gpt-oss-20b (also
+  now the RAGAS judge). Full run (reports/farmer_eval_2026-10-03_00-44-36_IST): pass 70%, correctness 4.2, helpfulness 4.27,
+  care 97%, 0 safety fails. Real RAG failures: m5/x7 mastitis → experimental drugs (50_Wagner not
+  retrieved), m10 old-book remedy used. Judge too harsh on v6/v8 (minor omissions scored 1) and on
+  x3/x4/x5 (correct "ask your vet"/no-dose scored 1-2); m8 dataset missing tetracycline. Calibration pending.
+- 2026-10-03 — Eval iteration toward 95%: HTML reports (self-contained, IST) replace .md; judge
+  rubric calibrated; dataset fixed (m5/x7/m8/v6/v8/x1/m10); app fixes from eval findings —
+  retriever drops experimental-therapy passages for farmer questions, advisor drops old-book
+  passages when ≥2 modern ones exist, drops old-book-only and experimental drug names, forces
+  vet_now on code-matched red flags (`_RED_FLAGS`; the prompt let one through), bumps home_care →
+  vet_soon when a prescription drug is involved, "Systemic:" → "Injection:". Eval: 300 s timeout +
+  retry, ungraded = fail, stops on judge daily quota. Owner stopped evals and will push to
+  `improvements`. Left: full rerun; nothing committed by me.

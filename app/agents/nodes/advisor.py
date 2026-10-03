@@ -110,6 +110,29 @@ Otherwise reply only:
 Never mention passages, studies or pages. Under 100 words.
 Last line, exactly: CARE_LEVEL: <home_care|vet_soon|vet_now>"""
 
+# The red flags from the prompt, checked in code on the farmer's own words. The prompt alone
+# let "udder swollen, clots, high fever, won't eat" through as vet_soon in the eval, and an
+# under-triaged emergency is the one mistake this node must not make.
+_RED_FLAGS = re.compile(
+    r"blood\w*\s+(?:in\s+(?:the\s+|her\s+|his\s+)?)?(?:milk|urine|dung|stool|diarrh\w*)|bloody\s+(?:milk|urine|dung|diarrh\w*)|"
+    r"red\s+urine|urine[^.]{0,15}\bred\b|high\s+fever|"
+    r"(?:struggl\w*|difficult\w*|hard|laboured|labored)\s+(?:to\s+)?breath\w*|"
+    r"(?:cannot|can't|can not|unable to|not able to)\s+(?:stand|get up|rise)|"
+    r"collaps\w*|fell down|convuls\w*|seizure|poison\w*|"
+    r"(?:left\s+side|belly|stomach)[^.]{0,30}(?:swollen|hard|bloat)|\bbloat\w*|"
+    r"placenta[^.]{0,40}(?:not\s+come\s+out|retained|stuck|hanging)|"
+    r"(?:not|n't|nothing)\s+(?:eaten|eating|eat)[^.]{0,25}(?:two|three|four|\d+)\s+days|"
+    r"spreading\s+fast|difficult\s+calving|calf\s+(?:is\s+)?stuck",
+    re.IGNORECASE,
+)
+
+_VET_NOW_ANSWER = (
+    "**Contact a vet now.** These signs need a vet today.\n\n"
+    "**While you wait**\n"
+    "- Keep the animal in a clean, dry, shaded place with fresh water.\n"
+    "- Keep it calm and away from the other animals."
+)
+
 _FALLBACK_ANSWER = (
     "**Contact a vet.** I can't advise on this one safely.\n\n"
     "**While you wait**\n"
@@ -138,6 +161,11 @@ def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
     blocks: list[str] = []
     used = 0
     historical = settings.historical_sources
+    modern = [d for d in documents if d.get("source") not in historical]
+    if len(modern) >= 2:
+        # With real evidence present the old book only adds outdated remedies: the label
+        # did not stop "carbolated cottonseed oil in the ears" being given for ticks.
+        documents = modern
     for doc in documents:
         block = doc.get("content", "")
         if not block.strip():
@@ -149,6 +177,21 @@ def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
         blocks.append(block)
         used += len(block)
     return "\n\n---\n\n".join(blocks), len(blocks)
+
+
+def _old_book_only_words(documents: list[dict]) -> set[str]:
+    """Words that appear in [OLD BOOK] passages but in no modern one.
+
+    The [OLD BOOK] label alone did not hold: "carbolated cottonseed oil in the ears"
+    still came back as tick medicine. A medicine whose name only the 1900s book
+    supplies is dropped in code instead.
+    """
+    historical = settings.historical_sources
+    old, modern = set(), set()
+    for doc in documents:
+        words = set(re.findall(r"[a-z]{6,}", doc.get("content", "").lower()))
+        (old if doc.get("source") in historical else modern).update(words)
+    return old - modern
 
 
 # Passages often say "see Appendix I" or "(Table 2)"; the model copies those into
@@ -189,7 +232,10 @@ _BRAND_WORD = re.compile(rf"\b(?:{_BRAND_ALT})\b", re.IGNORECASE)
 _DISALLOWED = re.compile(
     r"clenbuterol|chloramphenicol|nitrofur\w*|furazolidone|diethylstilb\w*|phenothiazine|"
     r"arsenic\w*|mercur\w*|strychnine|turpentine|kerosene|propolis|stem cell|"
-    r"carbolic|caustic potash|silver nitrate|cauteri\w*|inflat\w* the udder|udder inflation",
+    r"carbolic|caustic potash|silver nitrate|cauteri\w*|inflat\w* the udder|udder inflation|"
+    # Research-stage mastitis treatments from vetsci-12's review: the eval caught "Phage K
+    # intramammary" named as the medicine despite the established-treatments prompt rule.
+    r"phage|secretome|conditioned medium|nano\w*|baicalin|chlorogenic|probiotic\w*|carvacrol|thymol",
     re.IGNORECASE,
 )
 
@@ -219,6 +265,7 @@ _SELF_DOSE = re.compile(
 _JARGON = (
     (re.compile(r"\(\W*topical[^)]*\)", re.IGNORECASE), "(put on the wound)"),
     (re.compile(r"\bsystemic\W+(?=injection|antibiotic)", re.IGNORECASE), ""),
+    (re.compile(r"\bsystemic\s*:\s*", re.IGNORECASE), "Injection: "),
     (re.compile(r"\(\W*systemic\W*\)", re.IGNORECASE), "(injection)"),
     (re.compile(r"\btopical(?:ly)?\b\s*", re.IGNORECASE), ""),
     (re.compile(r"\blesions\b", re.IGNORECASE), "sores"),
@@ -262,7 +309,7 @@ def _plain(text: str) -> str:
 _ITEM_SPLIT = re.compile(r";|\.\s+|,\s+(?=[A-Za-z])|\s+(?:or|and)\s+(?!(?:IM|SC|IV|SQ)\b)")
 
 
-def _medicine_items(section: list[str]) -> list[str]:
+def _medicine_items(section: list[str], old_only: frozenset[str] = frozenset()) -> list[str]:
     """Filter one Medicine section: drop disallowed drugs and the model's notes, undose prescription ones."""
     out: list[str] = []
     for line in section:
@@ -272,6 +319,8 @@ def _medicine_items(section: list[str]) -> list[str]:
         for item in _ITEM_SPLIT.split(_VET_TAG.sub("", line[len(prefix):])):
             item = item.strip(" .,")
             if not item or _DISALLOWED.search(item) or item.lower().startswith("ask your vet"):
+                continue
+            if set(re.findall(r"[a-z]{6,}", item.lower())) & old_only:
                 continue
             if _RX.search(item):
                 # No dose for a prescription drug: everything from the first number on
@@ -299,13 +348,15 @@ def _vet_step(line: str) -> str:
     return line
 
 
-def _enforce_medicine_rules(answer: str) -> str:
-    """Generic names, plain words, no doses or tags on prescription drugs, no disallowed drugs, no self-dosing."""
+def _enforce_medicine_rules(answer: str, old_only: set[str] | None = None) -> str:
+    """Generic names, plain words, no doses or tags on prescription drugs, no disallowed drugs,
+    no old-book-only remedies, no self-dosing."""
     out: list[str] = []
     section: list[str] | None = None  # collecting the Medicine section's lines
+    old_only = frozenset(old_only or ())
 
     def flush() -> None:
-        out.extend(_medicine_items(section) or ["Ask your vet."])
+        out.extend(_medicine_items(section, old_only) or ["Ask your vet."])
         out.append("")
 
     for line in _plain(_clean_brands(_normalise(answer))).splitlines():
@@ -318,8 +369,11 @@ def _enforce_medicine_rules(answer: str) -> str:
         elif section is not None:
             if stripped:
                 section.append(line)
-        elif not _DISALLOWED.search(line):
-            # Outside the medicine list a disallowed name can only be an instruction to use it.
+        elif not _DISALLOWED.search(line) and not (
+            stripped.startswith(("-", "•", "*")) and set(re.findall(r"[a-z]{6,}", line.lower())) & old_only
+        ):
+            # Outside the medicine list a disallowed or old-book-only name can only be an
+            # instruction to use it.
             line = _vet_step(line)
             if not line.strip() or line not in out:  # rewritten steps can collapse to one sentence
                 out.append(line)
@@ -371,7 +425,15 @@ def advise_node(state: AgentState) -> dict:
                 feature="advisor",
             )
             answer, care_level = _extract_care_level(response.content)
-            answer = _enforce_medicine_rules(_strip_doc_references(answer))
+            old_only = _old_book_only_words(documents) - set(re.findall(r"[a-z]{6,}", question.lower()))
+            answer = _enforce_medicine_rules(_strip_doc_references(answer), old_only)
+            if _RED_FLAGS.search(question) and care_level != "vet_now":
+                logfire.warning("Red flag in question overrode care level {level}", level=care_level)
+                care_level, answer = "vet_now", _VET_NOW_ANSWER
+            elif care_level == "home_care" and (_RX.search(answer) or _RX.search(question)):
+                # A prescription drug, asked about or named, means the vet is involved: the
+                # eval's dose question ("how much oxytetracycline to inject") came back home_care.
+                care_level = "vet_soon"
             meta = {
                 "target": response.target_label,
                 "model": response.model,

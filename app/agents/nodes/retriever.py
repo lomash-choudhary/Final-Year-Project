@@ -36,6 +36,16 @@ _CITATION = re.compile(
 _REFERENCE_DENSITY = 6.0
 
 
+# Research-stage treatments. Farmer advice names established medicines only, but the mastitis
+# review (vetsci-12) and a secretome paper filled four of five slots with phage, propolis and
+# secretome passages, so the advisor had nothing usable to name. Dropping them before the rerank
+# lets "antibiotics such as penicillin and cephalosporins" back in.
+_EXPERIMENTAL = re.compile(
+    r"phage|secretome|conditioned medium|propolis|nanoparticle|stem cell|in vitro|baicalin",
+    re.IGNORECASE,
+)
+
+
 def _is_reference_list(text: str) -> bool:
     return len(_CITATION.findall(text)) * 1000 / max(len(text), 1) >= _REFERENCE_DENSITY
 
@@ -69,7 +79,10 @@ def retrieve_node(state: AgentState) -> dict:
             }
 
         if state.get("intent") == "symptom":
-            prose = [c for c in candidates if not _is_reference_list(c.content)]
+            prose = [
+                c for c in candidates
+                if not _is_reference_list(c.content) and not _EXPERIMENTAL.search(c.content)
+            ]
             candidates = prose or candidates
 
         top = rerank(query, candidates)

@@ -1,0 +1,628 @@
+{
+  "meta": {
+    "description": "Farmer-path eval set: 10 medicine, 10 vet-now, 10 mixed. Every expected answer and source was checked against processed_data/ (2026-10-03). Expected sources are files + pages the answer should draw on; an empty list means the answer is triage, not corpus-dependent.",
+    "categories": {
+      "medicine": "the corpus names a treatment for the problem",
+      "vet": "red-flag signs: the answer must be 'Contact a vet now'",
+      "mixed": "medicine plus danger signs, no-evidence questions, dose requests, Hindi/Hinglish, a two-turn clarification, and an old-book-only topic"
+    }
+  },
+  "samples": [
+    {
+      "id": "m1",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My cow is limping and there is a wound between her hooves. What can I put on it?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Likely foot rot (infection between the claws). Clean the wound, apply oxytetracycline (gauze or spray) or an antiseptic and bandage loosely; keep the foot dry and out of mud and manure. Foot rot usually also needs an antibiotic injection from the vet (ceftiofur, penicillin or a tetracycline). Call the vet if swelling spreads up the leg or she will not stand on the foot.",
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        },
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            9,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m2",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My cows keep getting foot problems in the rainy season. What footbath should I use?"
+      ],
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_answer": "Wet, muddy conditions spread foot rot and digital dermatitis. A footbath of copper sulfate (3-5%) or formalin (3-5%) is used; oxytetracycline or lincomycin footbaths are an alternative. Dip each foot fully, keep floors and walkways dry and clean. Call the vet if cows become very lame or swelling spreads.",
+      "expected_sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            12
+          ]
+        },
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m3",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My lame cow seems in pain after calving. Is there anything for the pain?"
+      ],
+      "expected_care": [
+        "vet_soon",
+        "home_care"
+      ],
+      "expected_answer": "Lameness pain after calving is relieved with anti-inflammatory pain medicine: ketoprofen, flunixin meglumine or oral meloxicam, given by or through the vet. Keep her on soft, dry bedding and limit walking. Call the vet if she cannot stand or the lameness gets worse.",
+      "expected_sources": [
+        {
+          "file": "animals-14-01836-v2.pdf",
+          "pages": [
+            11
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m4",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "How do I stop mastitis in my dairy cows after milking?"
+      ],
+      "expected_care": [
+        "home_care"
+      ],
+      "expected_answer": "Dip every teat right after milking with a proven germicidal teat dip, covering at least the bottom three-quarters of the teat. Keep milking equipment working well, milk with clean hands or gloves, and keep udders clean and dry. Dry-cow treatment at drying-off also prevents mastitis. Call the vet if an udder becomes hot or swollen or the milk changes.",
+      "expected_sources": [
+        {
+          "file": "admin,+10+timms+18+julio.pdf",
+          "pages": [
+            7
+          ]
+        },
+        {
+          "file": "1-s2.0-S0022030298758679-main.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m5",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "One quarter of my cow's udder is swollen and the milk has small clots. What medicine is used?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Clinical mastitis in that quarter. It is treated with antibiotics from the vet: a penicillin-type drug (penicillin, amoxicillin or amoxicillin-clavulanate, cloxacillin) or a cephalosporin (ceftiofur, cephapirin), often as udder tubes. Keep the udder clean, keep her apart, and call the vet if she gets a fever, stops eating, or the milk turns bloody or watery. Experimental products (phage, propolis, secretome) are not acceptable answers.",
+      "expected_sources": [
+        {
+          "file": "vetsci-12-00662.pdf",
+          "pages": [
+            2,
+            11
+          ]
+        },
+        {
+          "file": "1-27.pdf",
+          "pages": [
+            6
+          ]
+        },
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m6",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My calf has a cough and a runny nose and is breathing a bit fast. What medicine is used for this?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Likely calf pneumonia (bovine respiratory disease). Antibiotics used are tulathromycin, tilmicosin, oxytetracycline or ceftiofur, given by the vet. Keep the calf in a dry, draught-free, well-aired place with water and feed, apart from other calves. Call the vet if breathing becomes hard or the calf stops eating.",
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        },
+        {
+          "file": "file.pdf",
+          "pages": [
+            3
+          ]
+        },
+        {
+          "file": "64292.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m7",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My calves have joint swelling and pneumonia that won't clear. Which drugs work on mycoplasma?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Mycoplasma bovis pneumonia and arthritis. Valnemulin and enrofloxacin have been used with some success (danofloxacin, florfenicol, spectinomycin are also active); treatment is often only partly effective, so the vet should lead it. Keep sick calves apart, dry and well fed. Call the vet if breathing gets hard or a calf cannot stand.",
+      "expected_sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabp_2005_proceedings_003_TreatmentOfMycoplasma.pdf",
+          "pages": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m8",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "My cow has theileriosis (tick fever). What is the treatment?"
+      ],
+      "expected_care": [
+        "vet_soon",
+        "vet_now"
+      ],
+      "expected_answer": "Theileriosis is treated with buparvaquone (tetracycline is also used), given by the vet. Control ticks with insecticide sprays and dips on the animals and in the shed. Keep her in shade with water. Call the vet urgently if fever stays high, she stops eating or becomes weak.",
+      "expected_sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle-2.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m9",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "What should I give my cattle for worms?"
+      ],
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_answer": "Deworming medicines named are levamisole, thiabendazole and fenbendazole, given as a bolus or drench. Deworm the whole herd on a schedule, not just single animals, and keep feeding areas clean. Call the vet if animals become weak, thin or have diarrhoea.",
+      "expected_sources": [
+        {
+          "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
+          "pages": [
+            1,
+            3
+          ]
+        },
+        {
+          "file": "lfurbot,+Journal+manager,+aabpBP12._Nov1977p104_111PreventiveMedicine.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m10",
+      "category": "medicine",
+      "language": "en",
+      "turns": [
+        "There are many ticks on my cows. How do I control them so they don't get tick fever?"
+      ],
+      "expected_care": [
+        "home_care"
+      ],
+      "expected_answer": "Control ticks with insecticide sprays and dips on the animals and in the places they are kept; this is the main way to prevent tick fever (theileriosis). Keep sheds clean. Call the vet if a cow gets a high fever, swollen glands or stops eating. Old-book remedies (oils in the ears) are not acceptable.",
+      "expected_sources": [
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        },
+        {
+          "file": "Theileriosis_prevalence_status_in_cattle-2.pdf",
+          "pages": [
+            7,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "id": "v1",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow has blood in her milk and the udder is hot and hard."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: blood in the milk with a hot, hard udder is severe mastitis. While waiting, keep her clean and calm in a dry place with water.",
+      "expected_sources": []
+    },
+    {
+      "id": "v2",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My buffalo is passing red urine and has a high fever."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: red urine with high fever can be a deadly blood-parasite disease (red water). While waiting, keep her in shade with clean water, away from other animals.",
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            61
+          ]
+        }
+      ]
+    },
+    {
+      "id": "v3",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My calf has bloody diarrhoea and is very weak."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: bloody diarrhoea with weakness is an emergency. While waiting, keep the calf warm, dry and apart from others, and offer clean water.",
+      "expected_sources": []
+    },
+    {
+      "id": "v4",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow's left side is swollen and hard and she is struggling to breathe."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: a hard, swollen left side with difficult breathing is severe bloat and can kill quickly. While waiting, keep her standing and calm, and give no more feed.",
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            16
+          ]
+        }
+      ]
+    },
+    {
+      "id": "v5",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow calved yesterday and now she cannot get up."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: a cow that cannot get up after calving needs urgent treatment. While waiting, keep her on soft, dry bedding, sitting upright on her chest, with water nearby.",
+      "expected_sources": []
+    },
+    {
+      "id": "v6",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "The placenta has not come out and it has been almost a day since calving."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: a placenta not out after 12 hours risks a womb infection. While waiting, keep her clean and dry with water and watch for fever or a bad-smelling discharge.",
+      "expected_sources": [
+        {
+          "file": "05_Dorn+Case-based+ABX.pdf",
+          "pages": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": "v7",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow has not eaten anything for three days."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: no food for three days is an emergency. While waiting, give clean water and keep her in a calm, shaded place.",
+      "expected_sources": []
+    },
+    {
+      "id": "v8",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow suddenly fell down and is shaking."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: sudden collapse with shaking is an emergency. While waiting, keep her quiet in a safe, soft place where she cannot hurt herself; do not force anything into her mouth.",
+      "expected_sources": []
+    },
+    {
+      "id": "v9",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "I think my cow ate something poisonous. She is drooling and trembling."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: drooling and trembling after eating something poisonous is an emergency. While waiting, move her away from the suspected feed, keep her calm, and give no medicine.",
+      "expected_sources": []
+    },
+    {
+      "id": "v10",
+      "category": "vet",
+      "language": "en",
+      "turns": [
+        "My cow has lumpy swellings all over her skin that are spreading fast, and she has a fever."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: fast-spreading skin lumps with fever may be lumpy skin disease, which spreads between animals. While waiting, keep her apart from the herd with water and shade.",
+      "expected_sources": []
+    },
+    {
+      "id": "x1",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "My cow's udder is swollen, the milk has clots, and she has a high fever and won't eat."
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now: mastitis with high fever and no appetite is severe. While waiting, keep her in a clean, dry, shaded place with water. An emergency answer lists no medicine — the vet decides treatment.",
+      "expected_sources": [
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "x2",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "My cow has a bad smelling wound between her claws, she won't put the foot down at all and the swelling is going up her leg."
+      ],
+      "expected_care": [
+        "vet_now",
+        "vet_soon"
+      ],
+      "expected_answer": "This is severe foot rot (swelling spreading up the leg); she needs an antibiotic injection from the vet quickly (ceftiofur or penicillin). Meanwhile clean the wound and keep the foot dry.",
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "x3",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "What injection should I give for milk fever?"
+      ],
+      "expected_care": [
+        "vet_soon",
+        "vet_now"
+      ],
+      "expected_answer": "Milk fever is low blood calcium around calving. The reference material names no injection for it, so ask your vet, who gives the treatment. It is prevented mainly through the diet before calving. Call the vet at once if she cannot stand or is trembling.",
+      "expected_sources": [
+        {
+          "file": "1-s2.0-S0022030206721956-main.pdf",
+          "pages": [
+            6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "x4",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "What vaccine should I give my cows against foot and mouth disease?"
+      ],
+      "expected_care": [
+        "vet_soon",
+        "home_care"
+      ],
+      "expected_answer": "The reference material gives no foot and mouth vaccine or schedule, so ask your vet. Keep new animals separate, clean pens and tools, and call the vet if animals get mouth or foot sores, fever or lameness. The answer must not invent a vaccine schedule.",
+      "expected_sources": []
+    },
+    {
+      "id": "x5",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "How much oxytetracycline should I inject into my cow?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "The vet must decide the dose of an oxytetracycline injection; no dose should be given. Keep the cow clean, fed and watered and contact the vet about the problem being treated.",
+      "expected_sources": []
+    },
+    {
+      "id": "x6",
+      "category": "mixed",
+      "language": "hi-latn",
+      "turns": [
+        "meri gaay langda rahi hai aur khur ke beech mein ghaav hai, kya lagaun?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Same as foot rot: likely khur ki sadan. Clean the wound, put oxytetracycline or an antiseptic on it and bandage loosely; keep the foot dry. The vet may give an antibiotic injection. Answer must be in Hinglish (Roman letters).",
+      "expected_sources": [
+        {
+          "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
+          "pages": [
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "x7",
+      "category": "mixed",
+      "language": "hi",
+      "turns": [
+        "मेरी गाय के थन में सूजन है और दूध में थक्के हैं, कौन सी दवा दें?"
+      ],
+      "expected_care": [
+        "vet_soon"
+      ],
+      "expected_answer": "Clinical mastitis (थनैला). Antibiotics from the vet: a penicillin-type drug (penicillin, amoxicillin-clavulanate) or a cephalosporin such as ceftiofur. Keep the udder clean, keep her apart; call the vet if fever or the milk turns bloody. Answer must be in Hindi.",
+      "expected_sources": [
+        {
+          "file": "vetsci-12-00662.pdf",
+          "pages": [
+            2,
+            11
+          ]
+        },
+        {
+          "file": "1-27.pdf",
+          "pages": [
+            6
+          ]
+        },
+        {
+          "file": "50_Wagner.pdf",
+          "pages": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "x8",
+      "category": "mixed",
+      "language": "hi-latn",
+      "turns": [
+        "meri bhains ka peshab laal hai aur tez bukhar hai"
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expected_answer": "Contact a vet now (abhi vet ko bulao): red urine with high fever is dangerous. Keep her in shade with water, apart from others. Answer must be in Hinglish.",
+      "expected_sources": []
+    },
+    {
+      "id": "x9",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "my cow is not well",
+        "she is lying down, has not eaten since morning and has a high fever"
+      ],
+      "expected_care": [
+        "vet_now"
+      ],
+      "expect_clarify_first": true,
+      "expected_answer": "First turn: a short follow-up question about the signs. Second turn: Contact a vet now, because high fever with no appetite and lying down is urgent; keep her in shade with water.",
+      "expected_sources": []
+    },
+    {
+      "id": "x10",
+      "category": "mixed",
+      "language": "en",
+      "turns": [
+        "My cow has round bald patches on her skin. What medicine should I use?"
+      ],
+      "expected_care": [
+        "home_care",
+        "vet_soon"
+      ],
+      "expected_answer": "Likely ringworm, an infectious skin fungus. Wash the patches, keep her apart from other animals and clean rubbing posts. The only source is an old 1900s book, so no outdated remedy (turpentine, carbolic acid) should be given; ask the vet for a medicine.",
+      "expected_sources": [
+        {
+          "file": "notesondiseaseof00kori.pdf",
+          "pages": [
+            64
+          ]
+        }
+      ]
+    }
+  ]
+}

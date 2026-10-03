@@ -3,7 +3,7 @@ VENV := .venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
 
-.PHONY: help setup qdrant qdrant-down doctor doctor-live dry-run ingest reingest wipe api ui evals clean-index clean
+.PHONY: help setup qdrant qdrant-down doctor doctor-live dry-run ingest reingest wipe api ui evals eval-farmer clean-index clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ ui:  ## Run the Streamlit chat UI on :8501
 
 evals:  ## Run the evaluation dashboard on :8502
 	$(VENV)/bin/streamlit run evals/app.py --server.port 8502
+
+eval-farmer:  ## Farmer LLM-as-judge eval (30 questions, API must be running) → reports/
+	$(VENV)/bin/python -m evals.farmer_eval
 
 clean-index:  ## Delete local ingestion artefacts (manifest, parsed JSON, embedding cache)
 	rm -rf processed_data ingestion_manifest.json .cache

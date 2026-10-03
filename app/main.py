@@ -77,6 +77,10 @@ class QueryRequest(BaseModel):
     q: str = Field(..., min_length=1, max_length=4000, description="The user's question")
     thread_id: str | None = Field(default=None, description="Conversation id — omit to start a new thread")
     source_filter: str | None = Field(default=None, description="Restrict retrieval to one document")
+    include_sources: bool = Field(
+        default=False,
+        description="Eval only: return retrieved passages for farmer answers too (the UI never sets it)",
+    )
 
 
 class QueryResponse(BaseModel):
@@ -252,10 +256,11 @@ def query(request: QueryRequest) -> QueryResponse:
         care_level = final.get("care_level") or None
         awaiting = bool(final.get("awaiting_clarification"))
 
-        # Sources are returned for research answers (and for the eval harness),
-        # but suppressed for farmer-facing advice: that answer carries no
-        # citation markers, so a sources list would be unattached noise.
-        sources = [] if final.get("intent") == "symptom" else final.get("documents", [])
+        # Sources are returned for research answers, but suppressed for farmer-facing
+        # advice: that answer carries no citation markers, so a sources list would be
+        # unattached noise. The farmer eval sets include_sources to grade grounding.
+        hide = final.get("intent") == "symptom" and not request.include_sources
+        sources = [] if hide else final.get("documents", [])
 
         return QueryResponse(
             question=question,
