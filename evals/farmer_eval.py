@@ -60,7 +60,8 @@ IST = ZoneInfo("Asia/Kolkata")
 
 REQUEST_TIMEOUT = 300       # the app's gateway can wait out a Groq rate limit before answering
 DELAY_BETWEEN_CALLS = 6      # seconds between API calls — keeps the app inside Groq's free RPM
-PASSAGE_CHARS = 900          # per passage shown to the helpfulness judge
+PASSAGE_CHARS = 1600         # whole chunk (CHUNK_SIZE 1400 + overlap): at 900 the judge missed
+                             # ceftiofur at char 1021 of 1-27.pdf p6 and called it unsupported
 JUDGE_MAX_TOKENS = 1500      # gpt-oss reasons before answering; too low a cap returns empty content
 JUDGE_RETRIES = 4
 PASS_SCORE = 4               # correctness and helpfulness must both reach this
@@ -116,16 +117,16 @@ dose (only a vet should set one), "ask your vet" plus safe steps IS the right an
 Reply only JSON: {{"reasoning": "<two sentences>", "score": <1-5>}}"""
 
 
-_quota_exhausted = False  # set once Groq reports the judge's daily token limit; later calls skip
+# Keys whose daily token cap Groq has reported this run. The free tier gives gpt-oss-20b 200k
+# tokens/day per account; a full run uses most of one, so the judge fails over to
+# GROQ_EVALS_API_KEY_FALLBACK and only stops grading when every key is spent.
+_spent_keys: set[str] = set()
 
 
 def _judge(prompt: str) -> dict:
     """One judge call. Returns {"score": int|None, "reasoning": str}; never raises."""
-    global _quota_exhausted
-    if not settings.judge_api_key or not settings.judge_model:
+    if not settings.judge_api_keys or not settings.judge_model:
         return {"score": None, "reasoning": "judge not configured (GROQ_EVALS_API_KEY / JUDGE_MODEL)"}
-    if _quota_exhausted:
-        return {"score": None, "reasoning": "not graded: judge daily token quota used up"}
 
     payload = {
         "model": settings.judge_model,
@@ -134,25 +135,37 @@ def _judge(prompt: str) -> dict:
         "max_tokens": JUDGE_MAX_TOKENS,
         "response_format": {"type": "json_object"},
     }
-    headers = {"Authorization": f"Bearer {settings.judge_api_key}"}
     error = ""
-    for attempt in range(1, JUDGE_RETRIES + 1):
+    attempt = 0
+    while attempt < JUDGE_RETRIES:
+        keys = [k for k in settings.judge_api_keys if k not in _spent_keys]
+        if not keys:
+            return {"score": None, "reasoning": "not graded: every judge key's daily token quota is used up"}
+        attempt += 1
         try:
-            response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=90)
+            response = requests.post(
+                GROQ_URL, json=payload, headers={"Authorization": f"Bearer {keys[0]}"}, timeout=90
+            )
             if response.status_code == 429 and "per day" in response.text:
-                # The free tier's daily token cap (200k on gpt-oss-20b) cannot be waited out
-                # inside a run; one full run uses most of it. Stop judging, report honestly.
-                _quota_exhausted = True
-                logfire.error("Judge daily token quota used up — remaining samples not graded")
-                return {"score": None, "reasoning": "not graded: judge daily token quota used up"}
+                _spent_keys.add(keys[0])
+                logfire.warning("Judge key hit its daily token cap — switching key ({left} left)",
+                                left=len(keys) - 1)
+                attempt -= 1  # a key switch is not a failed attempt
+                continue
             if response.status_code == 429:
-                # Free tier is limited per minute; honour Groq's own wait rather than guessing.
+                # Per-minute limit; honour Groq's own wait rather than guessing.
                 wait = float(response.headers.get("retry-after") or 10 * attempt)
                 logfire.warning("Judge rate-limited, waiting {wait}s", wait=wait)
                 time.sleep(min(wait, 60))
                 continue
+            if response.status_code == 400 and "response_format" in payload:
+                # Groq rejects a reply that is not valid JSON (json_validate_failed). Ask again
+                # without strict mode; the parser below still demands JSON.
+                payload = {k: v for k, v in payload.items() if k != "response_format"}
+                continue
             response.raise_for_status()
             content = response.json()["choices"][0]["message"].get("content") or ""
+            content = content[content.find("{"): content.rfind("}") + 1] or content
             data = json.loads(content)
             score = int(data.get("score"))
             if 1 <= score <= 5:
@@ -162,7 +175,7 @@ def _judge(prompt: str) -> dict:
             error = str(exc)[:300]
             time.sleep(3 * attempt)
     logfire.error("Judge failed: {err}", err=error)
-    return {"score": None, "reasoning": f"judge failed: {error}"}
+    return {"score": None, "reasoning": f"not graded: judge failed ({error})"}
 
 
 # ── code metrics ──────────────────────────────────────────────────────────────
@@ -254,9 +267,11 @@ def run_sample(sample: dict, use_judge: bool) -> dict:
         "care_level": care,
         "care_ok": care in sample["expected_care"],
         "sources": [
-            {"file": s.get("source"), "page": s.get("page_label"), "score": s.get("score")}
+            {"file": s.get("source"), "page": s.get("page_label"), "score": s.get("score"),
+             "text": str(s.get("content", ""))}
             for s in sources
         ],
+        "judge_question": sample["turns"][-1] if len(sample["turns"]) == 1 else " → ".join(sample["turns"]),
         "file_recall": file_recall,
         "page_recall": page_recall,
         "language_ok": language_ok(sample["language"], answer),
@@ -271,18 +286,26 @@ def run_sample(sample: dict, use_judge: bool) -> dict:
         result["clarify_ok"] = bool(turns[0].get("awaiting_answer")) and len(turns) > 1
 
     if use_judge and not result["error"]:
-        passages = "\n\n".join(
-            f"[{s.get('source')} p.{s.get('page_label')}] {str(s.get('content', ''))[:PASSAGE_CHARS]}"
-            for s in sources
-        ) or "(no passages retrieved)"
-        question = sample["turns"][-1] if len(sample["turns"]) == 1 else result["question"]
-        result["correctness"] = _judge(_CORRECTNESS_PROMPT.format(
-            question=question, expected=sample["expected_answer"], actual=answer))
-        result["helpfulness"] = _judge(_HELPFULNESS_PROMPT.format(
-            question=question, passages=passages, actual=answer))
+        grade(result)
     else:
         result["correctness"] = result["helpfulness"] = {"score": None, "reasoning": "not judged"}
+    score_result(result, use_judge)
+    return result
 
+
+def grade(result: dict) -> None:
+    """Run both judge calls on a result — live, or from a saved report with --rejudge."""
+    passages = "\n\n".join(
+        f"[{s.get('file')} p.{s.get('page')}] {s.get('text', '')[:PASSAGE_CHARS]}" for s in result["sources"]
+    ) or "(no passages retrieved)"
+    question = result.get("judge_question") or result["question"]
+    result["correctness"] = _judge(_CORRECTNESS_PROMPT.format(
+        question=question, expected=result["expected_answer"], actual=result["answer"]))
+    result["helpfulness"] = _judge(_HELPFULNESS_PROMPT.format(
+        question=question, passages=passages, actual=result["answer"]))
+
+
+def score_result(result: dict, use_judge: bool) -> None:
     scores = [result["correctness"]["score"], result["helpfulness"]["score"]]
     # An ungraded sample is a fail, not a pass: a judge outage must never raise the pass rate.
     graded = not use_judge or all(s is not None for s in scores)
@@ -294,7 +317,6 @@ def run_sample(sample: dict, use_judge: bool) -> dict:
         and (not use_judge or min(scores) >= PASS_SCORE)
         and result["clarify_ok"] is not False
     )
-    return result
 
 
 # ── report ────────────────────────────────────────────────────────────────────
@@ -501,12 +523,36 @@ are scored 1-5 by an LLM judge; recall, care level and safety are checked in cod
     return html_path, json_path
 
 
+def rejudge(path: Path, args: argparse.Namespace) -> None:
+    """Grade what a quota-limited run left ungraded, reusing its saved answers and passages."""
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    results = saved["results"]
+    todo = [r for r in results if not r.get("graded", True) and not r["error"]]
+    for index, result in enumerate(todo, start=1):
+        grade(result)
+        score_result(result, use_judge=True)
+        print(f"[{index}/{len(todo)}] {result['id']:<4} {'PASS' if result['passed'] else 'FAIL'}  "
+              f"correct {_num(result['correctness']['score'])}  helpful {_num(result['helpfulness']['score'])}")
+    args.no_judge = False
+    started = datetime.strptime(saved["meta"]["run_at_ist"], "%d %b %Y, %I:%M:%S %p IST").replace(tzinfo=IST)
+    html_path, json_path = write_report(results, started, args)
+    print(f"Re-graded {len(todo)} · Report: {html_path.relative_to(ROOT_DIR)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Farmer-path eval against the live API.")
     parser.add_argument("--ids", help="comma-separated sample ids, e.g. m1,v2,x9")
     parser.add_argument("--category", choices=["medicine", "vet", "mixed"])
     parser.add_argument("--no-judge", action="store_true", help="skip the LLM judge (no judge quota)")
+    parser.add_argument(
+        "--rejudge", metavar="JSON",
+        help="re-grade the ungraded samples of a saved report — no app calls, judge quota only",
+    )
     args = parser.parse_args()
+
+    if args.rejudge:
+        rejudge(Path(args.rejudge), args)
+        return
 
     samples = json.loads(DATASET.read_text(encoding="utf-8"))["samples"]
     if args.ids:

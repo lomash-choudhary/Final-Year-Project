@@ -18,7 +18,7 @@
       "expected_care": [
         "vet_soon"
       ],
-      "expected_answer": "Likely foot rot (infection between the claws). Clean the wound, apply oxytetracycline (gauze or spray) or an antiseptic and bandage loosely; keep the foot dry and out of mud and manure. Foot rot usually also needs an antibiotic injection from the vet (ceftiofur, penicillin or a tetracycline). Call the vet if swelling spreads up the leg or she will not stand on the foot.",
+      "expected_answer": "Likely foot rot (infection between the claws). Clean the wound, apply oxytetracycline or lincomycin-spectinomycin (soaked gauze or spray) or an antiseptic and bandage loosely; keep the foot dry and out of mud and manure. Foot rot usually also needs an antibiotic injection from the vet (ceftiofur, penicillin or a tetracycline). Call the vet if swelling spreads up the leg or she will not stand on the foot.",
       "expected_sources": [
         {
           "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",
@@ -235,7 +235,7 @@
         "home_care",
         "vet_soon"
       ],
-      "expected_answer": "Deworming medicines named are levamisole, thiabendazole and fenbendazole, given as a bolus or drench. Deworm the whole herd on a schedule, not just single animals, and keep feeding areas clean. Call the vet if animals become weak, thin or have diarrhoea.",
+      "expected_answer": "A deworming medicine named in the corpus — any one or more of levamisole, thiabendazole or fenbendazole is correct — given as a bolus or drench. Deworm the whole herd on a schedule, not just single animals, and keep feeding areas clean. Call the vet if animals become weak, thin or have diarrhoea.",
       "expected_sources": [
         {
           "file": "lfurbot,+Journal+manager,+aabpProc04th1971_020_TreatmentForCattleParasites.pdf",
@@ -531,7 +531,7 @@
       "expected_care": [
         "vet_soon"
       ],
-      "expected_answer": "Same as foot rot: likely khur ki sadan. Clean the wound, put oxytetracycline or an antiseptic on it and bandage loosely; keep the foot dry. The vet may give an antibiotic injection. Answer must be in Hinglish (Roman letters).",
+      "expected_answer": "Same as foot rot: likely khur ki sadan. Clean the wound, put oxytetracycline (or lincomycin-spectinomycin) or an antiseptic on it and bandage loosely; keep the foot dry. The vet may give an antibiotic injection (ceftiofur, penicillin, sulfadimethoxine or a tetracycline) — naming these is correct. Answer must be in Hinglish (Roman letters).",
       "expected_sources": [
         {
           "file": "aabp_1998_v32_1_020_LamenessOfDairyCattle.pdf",

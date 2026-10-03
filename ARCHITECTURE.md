@@ -22,7 +22,7 @@ sequenceDiagram
     participant GW as LLM Gateway
 
     U->>UI: "prevalence of theileriosis in India?"
-    UI->>API: POST /query {q, thread_id}
+    UI->>API: POST /query {q, thread_id, user_id}
     API->>G: fast rails (regex, 0 API calls)
 
     alt rail fires
@@ -30,7 +30,7 @@ sequenceDiagram
         API-->>UI: answer, 0 model calls spent
     else passes
         G-->>API: pass
-        API->>P: invoke graph (thread state restored)
+        API->>P: invoke graph (seeded with summary + recent turns from Postgres)
         P->>GW: classify intent + rewrite query (fast tier)
         GW-->>P: "RESEARCH" + standalone query
 
@@ -241,5 +241,6 @@ graph TB
 | Guardrails are deterministic first | An LLM-based rail spends a model call on every greeting it exists to reject cheaply. On a free tier that is backwards. |
 | Off-topic blocking requires **explicit** off-domain signals | "What did the study find?" contains no veterinary term but is a valid follow-up. False positives destroy trust faster than false negatives waste quota. |
 | "No evidence" is answered **without an LLM** | A model asked to admit ignorance will sometimes answer from parametric memory instead — the exact failure a grounded system exists to prevent. |
-| `plan` is not a LangGraph reducer | MemorySaver persists state per thread, so an accumulating plan would replay every previous turn's reasoning. Nodes concatenate explicitly and the planner resets it. |
+| `plan` is not a LangGraph reducer | It is one turn's reasoning; an accumulating plan would replay every previous turn's steps. Nodes concatenate explicitly and `translate_in` resets it. |
+| Memory is **summary + recent window** in Postgres, not a checkpointer | `MemorySaver` lived in RAM (gone on every restart) and grew without bound. A bounded window plus a rolling summary keeps prompt size flat; the same rows serve the frontend's chat history. |
 | Evals hit the **live API**, not the graph | What gets measured is the system as deployed — guardrails, gateway fallback and the correction loop included. |

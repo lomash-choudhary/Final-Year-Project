@@ -8,14 +8,18 @@ from typing import Annotated, TypedDict
 
 class AgentState(TypedDict, total=False):
     # `operator.add` makes this a reducer: a node returns only the messages it
-    # adds and LangGraph concatenates. Without it each node would overwrite the
-    # whole list and conversation memory would be one turn deep.
+    # adds and LangGraph concatenates. `main.py` seeds it with the bounded memory
+    # window (app/memory/store.py) plus the new user message; the graph has no
+    # checkpointer, so nothing accumulates between requests.
     messages: Annotated[list[dict], operator.add]
 
-    # `plan` is deliberately NOT a reducer. MemorySaver persists state per
-    # thread_id, so an accumulating plan would carry every previous turn's
-    # reasoning into the next one. Nodes concatenate explicitly instead, and the
-    # planner — which runs first on every turn — resets it.
+    # Rolling summary of the turns that have left the window. Read by
+    # `app/agents/history.format_history`; "" for a short conversation.
+    memory_summary: str
+
+    # `plan` is deliberately NOT a reducer: it is this turn's reasoning only.
+    # Nodes concatenate explicitly (`state.get("plan", []) + [...]`), and
+    # translate_in — which runs first on every turn — resets it.
     plan: list[str]
 
     original_query: str      # exactly what the user typed, in their language
@@ -34,9 +38,10 @@ class AgentState(TypedDict, total=False):
     context_quality: str     # "sufficient" | "weak" | "empty"
     refinements: int         # self-correction loops used so far
 
-    # Follow-up questions. `awaiting_clarification` persists across turns via the
-    # checkpointer, which is how the clarifier knows the user's next message is
-    # an answer to its questions rather than a fresh problem.
+    # Follow-up questions. `awaiting_clarification` and `clarification_rounds`
+    # are stored on the conversation row and seeded back each turn, which is how
+    # the clarifier knows the user's next message answers its questions rather
+    # than starting a fresh problem.
     awaiting_clarification: bool
     clarification_rounds: int
     follow_up_questions: list[str]

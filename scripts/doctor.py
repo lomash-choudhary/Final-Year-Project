@@ -145,6 +145,33 @@ def check_qdrant() -> int:
         return 1
 
 
+def check_memory() -> int:
+    """Conversation memory is optional: no DATABASE_URL degrades to RAM, never blocks."""
+    print("\nConversation memory")
+    if not settings.DATABASE_URL:
+        line(WARN, "backend", "in-process only — set DATABASE_URL to persist chats and show history")
+        return 0
+    try:
+        from app.memory import store
+
+        status = store.status()
+        if status.get("status") == "error":
+            line(WARN, "postgres", status.get("error", "")[:90])
+            return 0
+        line(
+            OK, "postgres",
+            f"schema rag: {status.get('conversations', 0)} conversations, {status.get('messages', 0)} messages",
+        )
+        line(
+            OK, "policy",
+            f"window {settings.MEMORY_WINDOW_TURNS} turns · summary ≤{settings.MEMORY_SUMMARY_MAX_CHARS} chars"
+            f" · retention {settings.MEMORY_RETENTION_DAYS}d",
+        )
+    except Exception as exc:
+        line(WARN, "postgres", str(exc)[:90])
+    return 0
+
+
 def check_corpus() -> int:
     print("\nCorpus")
     data_dir = Path(settings.DATA_DIR)
@@ -235,7 +262,7 @@ def main() -> int:
     print("  Bovine Disease RAG — preflight check")
     print("=" * 74)
 
-    failures = check_config() + check_models() + check_qdrant() + check_corpus() + check_parsers()
+    failures = check_config() + check_models() + check_qdrant() + check_memory() + check_corpus() + check_parsers()
     if args.live:
         failures += check_live()
 

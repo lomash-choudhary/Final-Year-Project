@@ -181,6 +181,34 @@ class Settings:
     LLM_CACHE_ENABLED: bool = field(default_factory=lambda: _bool("LLM_CACHE_ENABLED", True))
     LLM_CACHE_TTL: int = field(default_factory=lambda: _int("LLM_CACHE_TTL", 900))
 
+    # ── conversation memory (Postgres) ────────────────────────────────────────
+    # Postgres URL for chat history + agent memory. Tables live in their own
+    # schema (`rag`) so they can share the frontend's Neon database without
+    # Drizzle ever seeing them. Blank = memory held in process RAM only (lost on
+    # restart, never listed in the UI) — the app still answers.
+    DATABASE_URL: str = field(default_factory=lambda: _str("DATABASE_URL"))
+    # Recent turns (user + assistant pair) the model sees word for word. Older
+    # turns are folded into a rolling summary, so prompt size stays flat however
+    # long the chat grows. 4 turns covers a clarify → answer → follow-up cycle.
+    MEMORY_WINDOW_TURNS: int = field(default_factory=lambda: _int("MEMORY_WINDOW_TURNS", 4))
+    # Turns that must spill out of the window before a summary call is made.
+    # Batching means one cheap fast-tier call every N turns, not every turn.
+    MEMORY_SUMMARY_BATCH_TURNS: int = field(default_factory=lambda: _int("MEMORY_SUMMARY_BATCH_TURNS", 2))
+    # Hard cap on the rolling summary, in characters (~200 tokens).
+    MEMORY_SUMMARY_MAX_CHARS: int = field(default_factory=lambda: _int("MEMORY_SUMMARY_MAX_CHARS", 800))
+    # Per-message cap when history is put into a prompt, in characters.
+    MEMORY_MSG_MAX_CHARS: int = field(default_factory=lambda: _int("MEMORY_MSG_MAX_CHARS", 600))
+    # Conversations idle longer than this are deleted (with their messages). Days.
+    MEMORY_RETENTION_DAYS: int = field(default_factory=lambda: _int("MEMORY_RETENTION_DAYS", 90))
+    # Same, for conversations with no user id (eval runs, scripts, logged-out
+    # callers that send none). Nobody can list these, so they only cost storage.
+    MEMORY_ANON_RETENTION_DAYS: int = field(default_factory=lambda: _int("MEMORY_ANON_RETENTION_DAYS", 7))
+    # Oldest conversations beyond this count are deleted per user. Keeps the
+    # sidebar and the free 0.5 GB Neon tier bounded.
+    MEMORY_MAX_CONVERSATIONS_PER_USER: int = field(
+        default_factory=lambda: _int("MEMORY_MAX_CONVERSATIONS_PER_USER", 200)
+    )
+
     # ── observability ─────────────────────────────────────────────────────────
     LOGFIRE_TOKEN: str = field(default_factory=lambda: _str("LOGFIRE_TOKEN"))
     LANGSMITH_TRACING: bool = field(default_factory=lambda: _bool("LANGSMITH_TRACING", False))
@@ -196,6 +224,9 @@ class Settings:
     # Dedicated Groq key for the LLM-as-judge evals (`evals.farmer_eval`), so an eval
     # run never spends the quota the live app answers with. Preferred over JUDGE_GROQ.
     GROQ_EVALS_API_KEY: str = field(default_factory=lambda: _str("GROQ_EVALS_API_KEY"))
+    # Second evals key (ideally another Groq account): the judge switches to it when the first
+    # hits its daily token cap — 200k/day on gpt-oss-20b, which one full run nearly uses up.
+    GROQ_EVALS_API_KEY_FALLBACK: str = field(default_factory=lambda: _str("GROQ_EVALS_API_KEY_FALLBACK"))
     # RAGAS judge. Blank falls back to GROQ_FAST_MODEL: judging is a cheap,
     # mechanical call and the 70B quota is needed by the live app.
     JUDGE_MODEL: str = field(default_factory=lambda: _str("JUDGE_MODEL"))
@@ -224,6 +255,12 @@ class Settings:
     def judge_api_key(self) -> str:
         """Eval judge key: the dedicated evals key, then JUDGE_GROQ, then the main Groq key."""
         return self.GROQ_EVALS_API_KEY or self.JUDGE_GROQ or self.GROQ_API_KEY
+
+    @property
+    def judge_api_keys(self) -> list[str]:
+        """Judge keys in failover order, duplicates dropped (a copy shares the same quota)."""
+        keys = [self.judge_api_key, self.GROQ_EVALS_API_KEY_FALLBACK]
+        return [k for i, k in enumerate(keys) if k and k not in keys[:i]]
 
     @property
     def judge_model(self) -> str:
@@ -358,6 +395,15 @@ class Settings:
                     f"RERANK_TOP_N ({self.RERANK_TOP_N}) exceeds RETRIEVAL_TOP_K ({self.RETRIEVAL_TOP_K}) — "
                     "the reranker cannot return more documents than were retrieved."
                 )
+            if not self.DATABASE_URL:
+                problems.append(
+                    "DATABASE_URL is empty — conversation memory is held in RAM only: lost on restart "
+                    "and no chat history for the UI."
+                )
+            elif not self.DATABASE_URL.startswith(("postgres://", "postgresql://")):
+                problems.append("DATABASE_URL must start with postgresql:// (a Postgres connection string).")
+            if self.MEMORY_WINDOW_TURNS < 1:
+                problems.append(f"MEMORY_WINDOW_TURNS must be ≥ 1 (got {self.MEMORY_WINDOW_TURNS}).")
 
         if scope == "evals":
             if not self.judge_api_key:
@@ -395,6 +441,8 @@ class Settings:
             "self_correction": self.ENABLE_SELF_CORRECTION,
             "translation": self.ENABLE_TRANSLATION,
             "clarification": self.ENABLE_CLARIFICATION,
+            "memory_backend": "postgres" if self.DATABASE_URL else "in-process",
+            "memory_window_turns": self.MEMORY_WINDOW_TURNS,
             "groq_keys_configured": sum(bool(k) for k in (self.GROQ_API_KEY, self.GROQ_FALLBACK_API_KEY)),
             "dedicated_feature_keys": [
                 name for name in ("translate", "clarifier", "advisor") if self.feature_key(name)

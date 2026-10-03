@@ -136,8 +136,10 @@ and over `gpt-oss-120b`, which writes the answers and would grade its own writin
 answer with judge reasoning) and a matching `.json`. Times are IST.
 
 **Judge quota**: gpt-oss-20b's free tier allows 200k tokens/day; one full run uses most of it.
-When Groq reports the daily cap, the eval stops judging and marks the remaining samples
-"not graded" — they count as **fails**, never passes. Run a full eval at most about once a day, or use
+The judge fails over to `GROQ_EVALS_API_KEY_FALLBACK` when the first key hits its daily
+cap. Only when every key is spent does it mark the remaining samples "not graded" — they count as
+**fails**, never passes — and `--rejudge reports/<run>.json` grades them later from the saved answers
+and passages, without calling the app again. Run a full eval at most about once a day, or use
 `--ids` / `--category` for spot checks.
 
 **Caveat**: the gateway caches responses for `LLM_CACHE_TTL` (900 s). A rerun inside that window

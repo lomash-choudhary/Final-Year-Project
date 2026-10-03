@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import json
 import time
+import uuid
 from pathlib import Path
 
 import logfire
@@ -58,6 +59,9 @@ def run_pipeline(golden_dataset: dict, progress_callback=None) -> dict:
     progress_callback(index, total, question, stage, preview="") drives the UI.
     """
     dataset = copy.deepcopy(golden_dataset)
+    # Conversation memory is persistent now: a fixed thread id would replay the
+    # previous run's turns into this one. One fresh tag per run keeps samples isolated.
+    run_tag = uuid.uuid4().hex[:8]
     samples = dataset["rag_samples"]
     total = len(samples)
 
@@ -72,7 +76,7 @@ def run_pipeline(golden_dataset: dict, progress_callback=None) -> dict:
                 try:
                     response = requests.post(
                         API_URL,
-                        json={"q": question, "thread_id": f"eval-{sample['id']}"},
+                        json={"q": question, "thread_id": f"eval-{sample['id']}-{run_tag}"},
                         timeout=REQUEST_TIMEOUT,
                     )
                     response.raise_for_status()

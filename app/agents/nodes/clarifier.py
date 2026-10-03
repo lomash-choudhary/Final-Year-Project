@@ -33,6 +33,7 @@ import re
 
 import logfire
 
+from app.agents.history import format_history
 from app.agents.state import AgentState
 from app.config import settings
 from app.llm import AllTargetsFailed, router
@@ -72,16 +73,6 @@ QUESTIONS:
 - <question, only if YES>"""
 
 
-def _format_history(messages: list[dict], limit: int = 6) -> str:
-    prior = messages[:-1][-limit:]
-    if not prior:
-        return "(this is the first message)"
-    return "\n".join(
-        f"{'Farmer' if m.get('role') == 'user' else 'Assistant'}: {str(m.get('content', ''))[:500]}"
-        for m in prior
-    )
-
-
 def _parse(raw: str, limit: int) -> tuple[bool, list[str]]:
     need_more = False
     questions: list[str] = []
@@ -116,7 +107,6 @@ def _compose_message(questions: list[str]) -> str:
 
 def clarify_node(state: AgentState) -> dict:
     query = state.get("query_en") or state.get("original_query", "")
-    messages = state.get("messages", [])
     rounds = state.get("clarification_rounds", 0)
 
     # Rule 1: the user is answering our previous questions — do not ask again.
@@ -140,7 +130,7 @@ def clarify_node(state: AgentState) -> dict:
         try:
             response = router.invoke(
                 _PROMPT.format(
-                    history=_format_history(messages),
+                    history=format_history(state, user_label="Farmer", empty="(this is the first message)"),
                     message=query,
                     max_questions=settings.MAX_FOLLOW_UP_QUESTIONS,
                 ),

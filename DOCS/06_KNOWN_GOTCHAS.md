@@ -68,11 +68,11 @@ downstream would then be wrong, which is worse than the missing pages.
 
 ## 5. `plan` is deliberately not a LangGraph reducer
 
-`messages` uses `operator.add` so conversation history accumulates. `plan` does not.
-
-MemorySaver persists state per `thread_id`. If `plan` accumulated, turn 3 of a conversation would
-show the reasoning steps from turns 1 and 2 as well. Nodes concatenate explicitly with
-`state.get("plan", []) + [...]`, and the planner — which runs first on every turn — resets it.
+`messages` uses `operator.add` so nodes can append replies. `plan` does not: it is one turn's
+reasoning. When the graph had a `MemorySaver` checkpointer, an accumulating plan would have shown
+turn 1 and 2's steps on turn 3. The graph now has no checkpointer (memory is seeded per request —
+§24), but the rule stands: nodes concatenate explicitly with `state.get("plan", []) + [...]`, and
+`translate_in` resets it.
 
 ---
 
@@ -344,3 +344,38 @@ token each — and passed every check, because it was not empty. It would have e
 of noise. The loader now scores each page's "glued" share (characters inside >25-char tokens) and
 re-extracts pages above 0.5 with PyMuPDF. Run `--dry-run` on new PDFs and look at the text: the
 check is cheap, and this class of defect is invisible in the run summary.
+
+---
+
+## 24. Conversation memory: bounded, persistent, and never the whole history
+
+The graph used to remember conversations with LangGraph's `MemorySaver`. Two problems:
+
+- **It lived in RAM.** Every restart — and every Render free-tier sleep — wiped it, so in
+  production the assistant effectively had no memory, and there was nothing for the frontend to
+  show as history.
+- **It rotted.** `messages` grew without bound, and every node's full state (retrieved passages
+  included) was checkpointed on every step. Nodes only read the last six messages, so older turns
+  were silently dropped rather than summarised.
+
+Memory is now Postgres (`app/memory/store.py`) and the graph has no checkpointer. The model sees
+`rolling summary + last MEMORY_WINDOW_TURNS turns`, so prompt size is flat. Things that look like
+optimisations but break it:
+
+- **Loading the full history into the prompt.** Long chats would blow the Groq TPM budget and
+  dilute the current question. The window is the cap; the summary carries the rest.
+- **Storing passages or the plan as memory.** That is the old bloat. Sources are kept per message,
+  trimmed to 300 characters, for display only.
+- **Summarising on the request path.** It is a background task; a failed summary keeps the window
+  and retries next turn.
+- **Health-checking pooled connections on checkout.** Neon can be 100–250 ms away; a check per
+  checkout doubles every call. The pool closes idle connections before Neon's 5-minute suspend
+  (`max_idle=240`) and retries once on `OperationalError` instead. Every store call is one
+  statement — the turn upsert + both message inserts are a single CTE.
+- **Server-side prepared statements on Neon's pooled endpoint.** It is PgBouncer in transaction
+  mode; `prepare_threshold=None` keeps psycopg from preparing.
+- **Fixed eval thread ids.** Memory now survives across runs, so `eval-<id>` would replay the
+  previous run's turns. The eval harnesses append a per-run tag.
+
+Ownership is by `user_id` on every read and write. The frontend's auth is still a mock token, so
+this separates users but is not a security boundary.

@@ -21,6 +21,7 @@ import re
 
 import logfire
 
+from app.agents.history import format_history, has_history
 from app.agents.state import AgentState
 from app.llm import AllTargetsFailed, router
 
@@ -56,23 +57,14 @@ Then write a self-contained search query for the knowledge base:
 (what to apply, what to give, how to prevent). Example: "my cow's udder is swollen and the milk has \
 clots, what medicine?" becomes "swollen udder clots in milk clinical mastitis dairy cow treatment".
 - For SYMPTOM, also give the single most likely disease name, or NONE if unclear.
+- Keep the farmer's body-part words; do not move them (a cow's left side is the belly/rumen side, \
+not the chest).
 - Do not invent details that were never mentioned.
 
 Reply in exactly this format and nothing else:
 INTENT: <CONVERSATIONAL or SYMPTOM or RESEARCH>
 QUERY: <the search query, or NONE for CONVERSATIONAL>
 DISEASE: <disease name, or NONE>"""
-
-
-def _format_history(messages: list[dict], limit: int = 6) -> str:
-    """Last few turns, excluding the message being planned for."""
-    prior = messages[:-1][-limit:]
-    if not prior:
-        return "(this is the first message)"
-    return "\n".join(
-        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {str(m.get('content', ''))[:600]}"
-        for m in prior
-    )
 
 
 # Boolean operators are meaningless to a vector search and dilute the embedding,
@@ -125,7 +117,7 @@ def planner_node(state: AgentState) -> dict:
     user_message = state.get("query_en") or (
         str(messages[-1]["content"]) if messages else state.get("original_query", "")
     )
-    history = _format_history(messages)
+    history = format_history(state, empty="(this is the first message)")
 
     with logfire.span("Planner", query=user_message[:120]):
         try:
@@ -136,7 +128,7 @@ def planner_node(state: AgentState) -> dict:
                 max_tokens=220,
                 feature="planner",
             )
-            intent, search_query = _parse(response.content, user_message, len(messages) > 1)
+            intent, search_query = _parse(response.content, user_message, has_history(state))
             disease = _parse_disease(response.content) if intent == "symptom" else ""
             logfire.info("Intent classified", intent=intent, search_query=search_query[:120])
 

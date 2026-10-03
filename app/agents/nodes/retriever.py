@@ -23,6 +23,7 @@ import re
 import logfire
 
 from app.agents.state import AgentState
+from app.config import settings
 from app.services.retrieval.qdrant_service import search
 from app.services.retrieval.ranking_service import rerank
 
@@ -85,7 +86,27 @@ def retrieve_node(state: AgentState) -> dict:
             ]
             candidates = prose or candidates
 
-        top = rerank(query, candidates)
+        if state.get("intent") == "symptom":
+            # At most 3 passages per paper. The footbath question filled all 5 slots with one
+            # lameness paper (two of them its introduction) and never saw the copper-sulfate /
+            # formalin table in animals-14 that answers it.
+            ranked = rerank(query, candidates, top_n=len(candidates))
+            historical = settings.historical_sources
+            if any(c.source not in historical and c.score >= 0.3 for c in ranked):
+                # The advisor ignores the old book when modern evidence exists, so its passages
+                # must not take slots either: for foot rot it held 3 of 5, the advisor dropped
+                # them, and the treatment passage ranked 6th never reached the model.
+                ranked = [c for c in ranked if c.source not in historical]
+            per_source: dict[str, int] = {}
+            top = []
+            for chunk in ranked:
+                if per_source.get(chunk.source, 0) < 3:
+                    top.append(chunk)
+                    per_source[chunk.source] = per_source.get(chunk.source, 0) + 1
+                if len(top) == settings.RERANK_TOP_N:
+                    break
+        else:
+            top = rerank(query, candidates)
         documents = [chunk.to_dict() for chunk in top]
 
         sources = sorted({d["source"] for d in documents})

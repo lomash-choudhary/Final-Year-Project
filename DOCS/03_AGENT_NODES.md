@@ -136,16 +136,38 @@ a sentence cut before "…in crossbred cattle only" changes the finding.
 
 | Field | Reducer | Why |
 |---|---|---|
-| `messages` | `operator.add` | Accumulates across turns — this is the conversation memory |
-| `plan` | none (overwrite) | MemorySaver persists per thread; an accumulating plan would replay every previous turn's reasoning. Nodes concatenate explicitly, and the planner resets it |
+| `messages` | `operator.add` | Seeded per request with the memory window + the new message; nodes append replies |
+| `memory_summary` | none | Rolling summary of turns older than the window |
+| `plan` | none (overwrite) | This turn's reasoning only. Nodes concatenate explicitly, and `translate_in` resets it |
 | `documents` | none | Must be replaced on a retry, not appended |
 | `refinements` | none | A counter |
 
 ## Memory
 
-`MemorySaver` keyed by `thread_id`. The Streamlit UI generates one per session and resets it with
-"Clear conversation". Memory is in-process — restarting uvicorn clears it. For persistence across
-restarts, swap in `SqliteSaver` in `graph.py`; the rest of the system is unaffected.
+Conversation memory lives in Postgres (`app/memory/store.py`, schema `rag` in the frontend's Neon
+database), keyed by `thread_id` and owned by `user_id`. The graph has **no checkpointer**.
+
+Per request, `main.py`:
+
+1. loads the conversation's **rolling summary** and its **last `MEMORY_WINDOW_TURNS` turns**
+   (English text only) in one round trip;
+2. seeds `messages` with that window + the new message, and `memory_summary` with the summary;
+   the clarifier's `awaiting_clarification` / `clarification_rounds` come from the same row;
+3. after the graph runs, saves the user message and the answer (one statement);
+4. schedules two background tasks: fold turns that left the window into the summary (one
+   fast-tier call per `MEMORY_SUMMARY_BATCH_TURNS` turns, capped at `MEMORY_SUMMARY_MAX_CHARS`),
+   and a daily retention sweep (`MEMORY_RETENTION_DAYS`, `MEMORY_MAX_CONVERSATIONS_PER_USER`).
+
+Every node builds its history through `app/agents/history.format_history`, so the prompt holds
+`summary + window`, each message capped at `MEMORY_MSG_MAX_CHARS` — constant size however long
+the chat is. Retrieved passages and the plan are never stored as memory; guardrail replies are
+stored for the history view but never fed back to the model.
+
+Without `DATABASE_URL`, or with the database down, a bounded in-process store takes over: the
+conversation still has memory until restart, and the history endpoints return 503.
+
+The same rows feed the frontend's sidebar through `GET /conversations` (list, no messages) and
+`GET /conversations/{id}/messages` (newest page first), both keyset-paginated.
 
 ---
 

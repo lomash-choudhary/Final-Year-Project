@@ -21,6 +21,7 @@ import re
 
 import logfire
 
+from app.agents.history import format_history
 from app.agents.state import AgentState
 from app.config import settings
 from app.llm import AllTargetsFailed, router
@@ -79,16 +80,6 @@ _NO_EVIDENCE = (
 )
 
 
-def _format_history(messages: list[dict], limit: int = 6) -> str:
-    prior = messages[:-1][-limit:]
-    if not prior:
-        return "(no earlier turns)"
-    return "\n".join(
-        f"{'User' if m.get('role') == 'user' else 'Assistant'}: {str(m.get('content', ''))[:800]}"
-        for m in prior
-    )
-
-
 def _build_context(documents: list[dict], budget: int) -> tuple[str, int]:
     """Numbered passages that fit the budget. Returns (text, passages_used)."""
     blocks: list[str] = []
@@ -117,7 +108,7 @@ def generate_node(state: AgentState) -> dict:
     user_message = state.get("query_en") or (
         str(messages[-1]["content"]) if messages else state.get("original_query", "")
     )
-    history = _format_history(messages)
+    history = format_history(state)
     documents = state.get("documents", [])
     intent = state.get("intent", "research")
 

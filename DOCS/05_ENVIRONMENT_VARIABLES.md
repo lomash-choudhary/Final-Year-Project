@@ -92,6 +92,21 @@ Changing any of these requires a `--wipe` re-ingest to take effect on existing d
 
 ---
 
+## Conversation memory
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | *(blank)* | Postgres URL — use the frontend's Neon database; tables are created in schema `rag`. Blank = memory in RAM only (lost on restart) and no chat history for the UI |
+| `MEMORY_WINDOW_TURNS` | `4` | Recent turns (user + assistant) the model sees verbatim |
+| `MEMORY_SUMMARY_BATCH_TURNS` | `2` | Turns past the window before one fast-tier summary call — batching keeps it to one call every few turns |
+| `MEMORY_SUMMARY_MAX_CHARS` | `800` | Rolling summary cap (~200 tokens) |
+| `MEMORY_MSG_MAX_CHARS` | `600` | Per-message cap when history goes into a prompt |
+| `MEMORY_RETENTION_DAYS` | `90` | Idle conversations older than this are deleted |
+| `MEMORY_ANON_RETENTION_DAYS` | `7` | Same, for conversations sent without a `user_id` (evals, scripts) |
+| `MEMORY_MAX_CONVERSATIONS_PER_USER` | `200` | Oldest beyond this are deleted per user |
+
+---
+
 ## Models
 
 **Every model name in this project comes from `.env`. None is hardcoded anywhere in the source —

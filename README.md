@@ -46,7 +46,7 @@ graph TB
         RT["Retriever<br/>search + rerank"]
         GD{"Grader<br/>context good enough?"}
         RS["Responder<br/>grounded synthesis"]
-        MEM[("MemorySaver<br/>per thread_id")]
+        MEM[("Postgres memory<br/>summary + recent window")]
     end
 
     subgraph RETRIEVAL ["Retrieval"]
